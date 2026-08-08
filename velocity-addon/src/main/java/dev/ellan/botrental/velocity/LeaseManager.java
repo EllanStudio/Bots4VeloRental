@@ -27,7 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 
 final class LeaseManager implements AutoCloseable {
-    private static final String PREFIX = "§7[§e!§7]§3§l挂机机器人 §r";
+    private static final String PREFIX = "[挂机机器人] ";
 
     private final RentalConfig config;
     private final AddonBotService bots;

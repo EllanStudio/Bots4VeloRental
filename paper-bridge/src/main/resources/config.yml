@@ -1,6 +1,6 @@
 server-id: "redstone"
 currency: "ellan_coin"
-menu-name: "机器人租赁"
+menu-name: "zmenu:机器人租赁"
 addon:
   base-url: "http://127.0.0.1:18765"
 bridge:

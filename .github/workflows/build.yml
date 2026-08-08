@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out rental addon
+        uses: actions/checkout@v4
+
+      - name: Check out Bots4Velo Addon API
+        uses: actions/checkout@v4
+        with:
+          repository: EllanServer/Bots4Velo
+          ref: feat/addon-spi
+          path: .deps/Bots4Velo
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Publish local Bots4Velo Addon API
+        run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.1.0
+
+      - name: Test and build
+        run: ./gradlew clean check shadowJar
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bots4velo-rental
+          path: |
+            velocity-addon/build/libs/bots4velo-rental-addon-*.jar
+            paper-bridge/build/libs/bots4velo-rental-paper-*.jar
+            zmenu/*.yml
+          if-no-files-found: error
