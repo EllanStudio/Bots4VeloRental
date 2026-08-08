@@ -1,0 +1,25 @@
+http:
+  bind-address: "127.0.0.1"
+  port: 18765
+bridge:
+  base-url: "http://127.0.0.1:18766"
+  shared-secret: "CHANGE_ME_TO_AT_LEAST_32_RANDOM_CHARACTERS"
+rental:
+  allowed-server: "redstone"
+  currency: "ellan_coin"
+  online-rate-per-minute: 5
+  offline-rate-per-minute: 20
+  max-per-player: 3
+  billing-period-seconds: 60
+  startup-timeout-seconds: 90
+  pool:
+    - "BOT_1"
+    - "BOT_2"
+    - "BOT_3"
+    - "BOT_4"
+    - "BOT_5"
+    - "BOT_6"
+    - "BOT_7"
+    - "BOT_8"
+    - "BOT_9"
+    - "BOT_10"

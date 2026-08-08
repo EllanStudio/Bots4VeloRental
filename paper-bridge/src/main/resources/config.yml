@@ -1,0 +1,22 @@
+server-id: "redstone"
+currency: "ellan_coin"
+menu-name: "机器人租赁"
+addon:
+  base-url: "http://127.0.0.1:18765"
+bridge:
+  bind-address: "127.0.0.1"
+  port: 18766
+  shared-secret: "CHANGE_ME_TO_AT_LEAST_32_RANDOM_CHARACTERS"
+rent-options-minutes: [30, 60, 120]
+topup-options-coins: [150, 300, 600]
+bot-usernames:
+  - "BOT_1"
+  - "BOT_2"
+  - "BOT_3"
+  - "BOT_4"
+  - "BOT_5"
+  - "BOT_6"
+  - "BOT_7"
+  - "BOT_8"
+  - "BOT_9"
+  - "BOT_10"
