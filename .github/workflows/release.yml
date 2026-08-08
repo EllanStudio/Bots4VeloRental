@@ -26,6 +26,8 @@ jobs:
           distribution: temurin
           java-version: "25"
           cache: gradle
+      - name: Make Gradle wrappers executable
+        run: chmod +x gradlew .deps/Bots4Velo/gradlew
       - name: Publish local Bots4Velo Addon API
         run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.1.0
       - name: Build release
