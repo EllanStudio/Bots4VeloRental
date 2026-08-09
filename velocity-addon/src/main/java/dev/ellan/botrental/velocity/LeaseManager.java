@@ -282,7 +282,14 @@ final class LeaseManager implements AutoCloseable {
         }
         if (snapshot.state() != AddonBotState.PLAY) {
             if (now - lease.lastActionAt >= 10_000) {
-                if (snapshot.state() == AddonBotState.RECONNECT_WAIT || snapshot.state() == AddonBotState.FAILED) {
+                // Bots4Velo owns the backoff while a session is already waiting
+                // to reconnect. Calling the operator-facing reconnect API here
+                // would cancel that pending attempt and enqueue a replacement
+                // behind the global spawn interval, making one disconnect take
+                // minutes to recover when the pool is busy. Only a terminal
+                // FAILED session needs an explicit recovery request; a
+                // RECONNECT_WAIT session is already recovering by itself.
+                if (snapshot.state() == AddonBotState.FAILED) {
                     bots.reconnect(lease.botId);
                 }
                 else if (snapshot.state() == AddonBotState.STOPPED) {
