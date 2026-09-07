@@ -13,6 +13,7 @@ import dev.nulli0n.vbot.addon.api.AddonBotService;
 import dev.nulli0n.vbot.addon.api.AddonBotSnapshot;
 import dev.nulli0n.vbot.addon.api.AddonBotState;
 import dev.nulli0n.vbot.addon.api.AddonLogger;
+import dev.nulli0n.vbot.addon.api.AddonServerSwitchResult;
 
 import java.time.Clock;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 
 final class LeaseManager implements AutoCloseable {
     private static final String PREFIX = "[挂机机器人] ";
@@ -243,6 +245,8 @@ final class LeaseManager implements AutoCloseable {
             return;
         }
         if ("DISCONNECTED".equals(event.type()) || "STOPPED".equals(event.type())) {
+            lease.serverSwitchGeneration++;
+            lease.serverSwitchInFlight = false;
             lease.state = LeaseState.STARTING;
             lease.startDeadline = now() + config.startupTimeoutSeconds() * 1000;
             lease.lastActionAt = 0;
@@ -281,6 +285,9 @@ final class LeaseManager implements AutoCloseable {
             return;
         }
         if (snapshot.state() != AddonBotState.PLAY) {
+            if (lease.serverSwitchInFlight) {
+                return;
+            }
             if (now - lease.lastActionAt >= 10_000) {
                 // Bots4Velo owns the backoff while a session is already waiting
                 // to reconnect. Calling the operator-facing reconnect API here
@@ -302,10 +309,8 @@ final class LeaseManager implements AutoCloseable {
         }
         String server = bots.currentServer(lease.botId).orElse("");
         if (!server.equalsIgnoreCase(config.allowedServer())) {
-            if (now - lease.lastActionAt >= 5_000) {
-                bots.switchServer(lease.botId, config.allowedServer());
-                lease.lastActionAt = now;
-                save(lease);
+            if (!lease.serverSwitchInFlight && now - lease.lastActionAt >= 5_000) {
+                requestServerSwitch(lease, now);
             }
             return;
         }
@@ -313,6 +318,56 @@ final class LeaseManager implements AutoCloseable {
             return;
         }
         activate(lease);
+    }
+
+    private void requestServerSwitch(Lease lease, long now) {
+        long generation = ++lease.serverSwitchGeneration;
+        lease.serverSwitchInFlight = true;
+        lease.lastActionAt = now;
+        save(lease);
+
+        CompletionStage<AddonServerSwitchResult> request;
+        try {
+            request = bots.switchServer(lease.botId, config.allowedServer());
+        }
+        catch (RuntimeException failure) {
+            if (lease.serverSwitchGeneration == generation) {
+                lease.serverSwitchInFlight = false;
+            }
+            logger.warn("Server switch request failed for " + lease.botId + ": " + failure.getMessage());
+            return;
+        }
+        if (request == null) {
+            if (lease.serverSwitchGeneration == generation) {
+                lease.serverSwitchInFlight = false;
+            }
+            logger.warn("Server switch service returned no result for " + lease.botId);
+            return;
+        }
+        request.whenComplete((result, failure) -> onServerSwitchResult(
+            lease, generation, result, failure));
+    }
+
+    private void onServerSwitchResult(Lease lease, long generation,
+                                      AddonServerSwitchResult result, Throwable failure) {
+        synchronized (this) {
+            if (leases.get(lease.id) != lease || lease.state == LeaseState.REFUND_PENDING
+                || lease.state == LeaseState.ENDED || lease.serverSwitchGeneration != generation) {
+                return;
+            }
+            lease.serverSwitchInFlight = false;
+            if (failure != null) {
+                logger.warn("Server switch request failed for " + lease.botId + ": " + failure.getMessage());
+                return;
+            }
+            if (result == null) {
+                logger.warn("Server switch service returned no result for " + lease.botId);
+                return;
+            }
+            if (!result.successful()) {
+                logger.warn("Server switch for " + lease.botId + " was not accepted: " + result.status());
+            }
+        }
     }
 
     private void activate(Lease lease) {
@@ -363,6 +418,8 @@ final class LeaseManager implements AutoCloseable {
 
     private void beginEnd(Lease lease, String reason, String message) {
         lease.state = LeaseState.REFUND_PENDING;
+        lease.serverSwitchGeneration++;
+        lease.serverSwitchInFlight = false;
         lease.endReason = reason;
         if (lease.refundId == null) {
             lease.refundId = UUID.randomUUID();

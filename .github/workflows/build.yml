@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: EllanServer/Bots4Velo
-          ref: feat/addon-spi
+          ref: 95f027b525fc0974c5019a501445996a84d76697
           path: .deps/Bots4Velo
 
       - name: Set up Java 21
@@ -39,7 +39,7 @@ jobs:
         run: chmod +x gradlew .deps/Bots4Velo/gradlew
 
       - name: Publish local Bots4Velo Addon API
-        run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.1.0
+        run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.0.3
 
       - name: Test and build
         run: ./gradlew clean check shadowJar

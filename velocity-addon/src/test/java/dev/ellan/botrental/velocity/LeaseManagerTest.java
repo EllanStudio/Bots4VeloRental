@@ -99,6 +99,113 @@ class LeaseManagerTest {
         rig.close();
     }
 
+    @Test
+    void doesNotOverlapServerSwitchRequestsWhileAuthMeTransitionIsPending() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+        rig.bots.deferSwitch = true;
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(1);
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests)
+            .as("a slow AuthMe/Velocity transition must not be duplicated by the rental tick")
+            .isEqualTo(1);
+
+        rig.bots.servers.put(botId, "redstone");
+        rig.bots.pendingSwitches.getFirst().complete(switchResult(botId));
+        rig.manager.tick();
+
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases()).hasSize(1);
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases().getFirst().state())
+            .isEqualTo(LeaseState.ACTIVE.name());
+        assertThat(rig.bridge.refunds).isEmpty();
+        rig.close();
+    }
+
+    @Test
+    void retriesAfterAsyncSwitchReportsAuthenticationPending() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+        rig.bots.deferSwitch = true;
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        rig.bots.pendingSwitches.getFirst().complete(new AddonServerSwitchResult(
+            AddonServerSwitchStatus.AUTHENTICATION_PENDING, botId, botId, "redstone",
+            "authentication has not completed"));
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(2);
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases().getFirst().state())
+            .isEqualTo(LeaseState.STARTING.name());
+        rig.close();
+    }
+
+    @Test
+    void ignoresAStaleSwitchCompletionAfterDisconnectStartsANewRequest() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+        rig.bots.deferSwitch = true;
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        rig.manager.onBotEvent(new AddonBotEvent(
+            Instant.ofEpochMilli(rig.clock.millis()), botId, "DISCONNECTED", "auth transition"));
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(2);
+
+        rig.bots.pendingSwitches.get(0).complete(switchResult(botId));
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests)
+            .as("a completion from the pre-disconnect request must not clear the new guard")
+            .isEqualTo(2);
+        rig.close();
+    }
+
+    @Test
+    void synchronousSwitchFailureClearsInFlightGuardForTheNextRetry() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+        rig.bots.throwOnSwitch = true;
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(1);
+
+        rig.bots.throwOnSwitch = false;
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(2);
+        rig.close();
+    }
+
+    private static AddonServerSwitchResult switchResult(String botId) {
+        return new AddonServerSwitchResult(
+            AddonServerSwitchStatus.SWITCHED, botId, botId, "redstone", "SUCCESS");
+    }
+
     private TestRig rig() throws Exception {
         RentalConfig config = new RentalConfig("127.0.0.1", 18765, "http://127.0.0.1:18766",
             "01234567890123456789012345678901", "redstone", "ellan_coin", 5, 20, 3,
@@ -175,6 +282,10 @@ class LeaseManagerTest {
         private final Map<String, AddonBotState> states = new HashMap<>();
         private final Map<String, String> servers = new HashMap<>();
         private final Map<UUID, Boolean> online = new HashMap<>();
+        private final List<CompletableFuture<AddonServerSwitchResult>> pendingSwitches = new ArrayList<>();
+        private int switchRequests;
+        private boolean deferSwitch;
+        private boolean throwOnSwitch;
 
         private FakeBots(List<String> ids) {
             ids.forEach(id -> states.put(id, AddonBotState.STOPPED));
@@ -218,9 +329,17 @@ class LeaseManagerTest {
 
         @Override
         public CompletionStage<AddonServerSwitchResult> switchServer(String id, String server) {
+            switchRequests++;
+            if (throwOnSwitch) {
+                throw new IllegalStateException("simulated switch failure");
+            }
+            if (deferSwitch) {
+                CompletableFuture<AddonServerSwitchResult> pending = new CompletableFuture<>();
+                pendingSwitches.add(pending);
+                return pending;
+            }
             servers.put(id, server);
-            return CompletableFuture.completedFuture(new AddonServerSwitchResult(
-                AddonServerSwitchStatus.SWITCHED, id, id, server, "test"));
+            return CompletableFuture.completedFuture(switchResult(id));
         }
 
         @Override
