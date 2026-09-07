@@ -20,6 +20,10 @@ final class Lease {
     long nextChargeAt;
     long startDeadline;
     long lastActionAt;
+    /** Not persisted: prevents overlapping async server-switch requests. */
+    boolean serverSwitchInFlight;
+    /** Not persisted: invalidates callbacks from a server-switch request after a disconnect. */
+    long serverSwitchGeneration;
     UUID refundId;
     String endReason;
 

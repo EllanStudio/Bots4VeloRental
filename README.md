@@ -66,14 +66,16 @@ HMAC-SHA256 签名。不要把桥接端口转发到公网。
 ## 构建
 
 Paper 桥接直接使用 ExcellentEconomy 2.8.0 API，因此需要 Java 25。Velocity
-Addon 以 Java 21 为目标。构建前先把带 Addon SPI 的 Bots4Velo API 发布到本机：
+Addon 以 Java 21 为目标。AuthMe 更新后的登录流程要求使用包含服务器切换结果
+处理修复的 Bots4Velo API `3.0.3`。构建前先把固定版本的 API 发布到本机：
 
 ```bash
 git clone https://github.com/EllanServer/Bots4Velo.git
 cd Bots4Velo
-./gradlew :addon-api:publishToMavenLocal -PpluginVersion=3.1.0
+git checkout 95f027b525fc0974c5019a501445996a84d76697
+./gradlew :addon-api:publishToMavenLocal -PpluginVersion=3.0.3
 
-cd ../Bots4Velo-Rental
+cd ../Bots4VeloRental
 ./gradlew clean check shadowJar
 ```
 
