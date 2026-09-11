@@ -38,6 +38,10 @@ final class LeaseManager implements AutoCloseable {
     private final AddonLogger logger;
     private final Clock clock;
     private final Map<UUID, Lease> leases = new HashMap<>();
+    /** Connection-local positive authentication evidence from Bots4Velo. */
+    private final Set<String> authenticatedBots = new HashSet<>();
+    /** Whether this bot has emitted lifecycle/auth events on the addon bus. */
+    private final Set<String> observedAuthLifecycles = new HashSet<>();
     private final Map<UUID, ActionResponse> recentRequests = new LinkedHashMap<>() {
         @Override
         protected boolean removeEldestEntry(Map.Entry<UUID, ActionResponse> eldest) {
@@ -244,7 +248,18 @@ final class LeaseManager implements AutoCloseable {
         if (lease == null || lease.state == LeaseState.REFUND_PENDING) {
             return;
         }
+        String botKey = lease.botId.toLowerCase();
+        if (event.type() != null && (event.type().equals("PLAY")
+            || event.type().startsWith("AUTH_"))) {
+            observedAuthLifecycles.add(botKey);
+        }
+        if ("AUTHENTICATED".equals(event.type())) {
+            authenticatedBots.add(botKey);
+            return;
+        }
         if ("DISCONNECTED".equals(event.type()) || "STOPPED".equals(event.type())) {
+            authenticatedBots.remove(botKey);
+            observedAuthLifecycles.remove(botKey);
             lease.serverSwitchGeneration++;
             lease.serverSwitchInFlight = false;
             lease.state = LeaseState.STARTING;
@@ -305,6 +320,14 @@ final class LeaseManager implements AutoCloseable {
                 lease.lastActionAt = now;
                 save(lease);
             }
+            return;
+        }
+        // PLAY only means the transport is connected.  Gate the rental's
+        // first server switch on the core's confirmed AuthMe/VeloAuth state;
+        // otherwise the old 5-second poll turns AUTHENTICATION_PENDING into a
+        // noisy retry loop while the authentication conversation is pending.
+        if (observedAuthLifecycles.contains(lease.botId.toLowerCase())
+            && !authenticatedBots.contains(lease.botId.toLowerCase())) {
             return;
         }
         String server = bots.currentServer(lease.botId).orElse("");
