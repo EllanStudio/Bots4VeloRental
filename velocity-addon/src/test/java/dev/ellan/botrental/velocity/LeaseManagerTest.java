@@ -60,6 +60,7 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "redstone");
+        authenticate(rig, botId);
 
         rig.manager.tick();
         assertThat(rig.manager.status(new StatusRequest(owner)).leases().getFirst().reserveCoins()).isEqualTo(40);
@@ -89,6 +90,7 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "redstone");
+        authenticate(rig, botId);
         rig.manager.tick();
 
         var cancelled = rig.manager.cancel(new OwnerSlotRequest(UUID.randomUUID(), owner, 1));
@@ -107,6 +109,7 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "lobby");
+        authenticate(rig, botId);
         rig.bots.deferSwitch = true;
 
         rig.clock.advanceSeconds(5);
@@ -138,6 +141,7 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "lobby");
+        authenticate(rig, botId);
         rig.bots.deferSwitch = true;
 
         rig.clock.advanceSeconds(5);
@@ -186,12 +190,15 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "lobby");
+        authenticate(rig, botId);
         rig.bots.deferSwitch = true;
 
         rig.clock.advanceSeconds(5);
         rig.manager.tick();
         rig.manager.onBotEvent(new AddonBotEvent(
             Instant.ofEpochMilli(rig.clock.millis()), botId, "DISCONNECTED", "auth transition"));
+        rig.manager.onBotEvent(new AddonBotEvent(
+            Instant.ofEpochMilli(rig.clock.millis()), botId, "AUTHENTICATED", "reconnected"));
         rig.manager.tick();
         assertThat(rig.bots.switchRequests).isEqualTo(2);
 
@@ -212,6 +219,7 @@ class LeaseManagerTest {
         String botId = created.lease().botId();
         rig.bots.states.put(botId, AddonBotState.PLAY);
         rig.bots.servers.put(botId, "lobby");
+        authenticate(rig, botId);
         rig.bots.throwOnSwitch = true;
 
         rig.clock.advanceSeconds(5);
@@ -228,6 +236,11 @@ class LeaseManagerTest {
     private static AddonServerSwitchResult switchResult(String botId) {
         return new AddonServerSwitchResult(
             AddonServerSwitchStatus.SWITCHED, botId, botId, "redstone", "SUCCESS");
+    }
+
+    private static void authenticate(TestRig rig, String botId) {
+        rig.manager.onBotEvent(new AddonBotEvent(
+            Instant.ofEpochMilli(rig.clock.millis()), botId, "AUTHENTICATED", "confirmed"));
     }
 
     private TestRig rig() throws Exception {
