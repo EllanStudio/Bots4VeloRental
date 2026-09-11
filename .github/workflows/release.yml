@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: EllanServer/Bots4Velo
-          ref: v3.0.5
+          ref: v3.0.8
           path: .deps/Bots4Velo
       - uses: actions/setup-java@v4
         with:
@@ -29,7 +29,7 @@ jobs:
       - name: Make Gradle wrappers executable
         run: chmod +x gradlew .deps/Bots4Velo/gradlew
       - name: Publish local Bots4Velo Addon API
-        run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.0.5
+        run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.0.8
       - name: Build release
         run: ./gradlew clean check shadowJar -PpluginVersion="${GITHUB_REF_NAME#v}"
       - name: Create release
