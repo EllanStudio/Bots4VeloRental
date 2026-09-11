@@ -4,12 +4,12 @@ plugins {
 }
 
 dependencies {
-    compileOnly("dev.nulli0n.bots4velo:bots4velo-addon-api:3.0.5")
+    compileOnly("dev.nulli0n.bots4velo:bots4velo-addon-api:3.0.8")
     implementation(project(":common"))
     implementation("org.yaml:snakeyaml:2.5")
     implementation("org.xerial:sqlite-jdbc:3.51.3.0")
 
-    testImplementation("dev.nulli0n.bots4velo:bots4velo-addon-api:3.0.5")
+    testImplementation("dev.nulli0n.bots4velo:bots4velo-addon-api:3.0.8")
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
