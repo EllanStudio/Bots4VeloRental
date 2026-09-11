@@ -155,6 +155,30 @@ class LeaseManagerTest {
     }
 
     @Test
+    void doesNotRequestRentalSwitchUntilCoreAuthenticationIsConfirmed() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+
+        rig.manager.onBotEvent(new AddonBotEvent(
+            Instant.ofEpochMilli(rig.clock.millis()), botId, "PLAY", "entered play"));
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests)
+            .as("PLAY is not proof of AuthMe authentication")
+            .isZero();
+
+        rig.manager.onBotEvent(new AddonBotEvent(
+            Instant.ofEpochMilli(rig.clock.millis()), botId, "AUTHENTICATED", "confirmed"));
+        rig.manager.tick();
+        assertThat(rig.bots.switchRequests).isEqualTo(1);
+        rig.close();
+    }
+
+    @Test
     void ignoresAStaleSwitchCompletionAfterDisconnectStartsANewRequest() throws Exception {
         TestRig rig = rig();
         UUID owner = UUID.randomUUID();
