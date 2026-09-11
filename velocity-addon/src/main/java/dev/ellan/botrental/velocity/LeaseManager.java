@@ -62,6 +62,14 @@ final class LeaseManager implements AutoCloseable {
         this.clock = clock;
         for (Lease lease : store.loadOpen()) {
             leases.put(lease.id, lease);
+            // Event listeners are registered after this constructor returns.  A
+            // bot that was already authenticated before an addon reload would
+            // otherwise have no event for us to observe and could remain stuck
+            // in STARTING forever.  Seed the connection-local evidence from the
+            // core snapshot, then continue to rely on events for transitions.
+            bots.bot(lease.botId)
+                .filter(AddonBotSnapshot::authenticationComplete)
+                .ifPresent(snapshot -> authenticatedBots.add(lease.botId.toLowerCase()));
         }
     }
 
@@ -320,7 +328,15 @@ final class LeaseManager implements AutoCloseable {
         // otherwise the old 5-second poll turns AUTHENTICATION_PENDING into a
         // noisy retry loop while the authentication conversation is pending.
         if (!authenticatedBots.contains(lease.botId.toLowerCase())) {
-            return;
+            // Also refresh the positive snapshot bit in case AUTHENTICATED was
+            // emitted before listener registration (for example after addon
+            // reload).  Never infer auth from PLAY alone.
+            if (bots.bot(lease.botId).map(AddonBotSnapshot::authenticationComplete).orElse(false)) {
+                authenticatedBots.add(lease.botId.toLowerCase());
+            }
+            else {
+                return;
+            }
         }
         String server = bots.currentServer(lease.botId).orElse("");
         if (!server.equalsIgnoreCase(config.allowedServer())) {

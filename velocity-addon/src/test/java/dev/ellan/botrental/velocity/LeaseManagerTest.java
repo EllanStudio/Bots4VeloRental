@@ -183,6 +183,27 @@ class LeaseManagerTest {
     }
 
     @Test
+    void acceptsAuthenticationSnapshotWhenEventWasEmittedBeforeAddonListener() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "lobby");
+        // Simulate an addon reload: the core has already confirmed AuthMe, but
+        // the AUTHENTICATED event was emitted before LeaseManager subscribed.
+        rig.bots.authentication.put(botId, true);
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+
+        assertThat(rig.bots.switchRequests)
+            .as("the positive core snapshot must recover an already-authenticated session")
+            .isEqualTo(1);
+        rig.close();
+    }
+
+    @Test
     void ignoresAStaleSwitchCompletionAfterDisconnectStartsANewRequest() throws Exception {
         TestRig rig = rig();
         UUID owner = UUID.randomUUID();
@@ -317,6 +338,7 @@ class LeaseManagerTest {
 
     private static final class FakeBots implements AddonBotService {
         private final Map<String, AddonBotState> states = new HashMap<>();
+        private final Map<String, Boolean> authentication = new HashMap<>();
         private final Map<String, String> servers = new HashMap<>();
         private final Map<UUID, Boolean> online = new HashMap<>();
         private final List<CompletableFuture<AddonServerSwitchResult>> pendingSwitches = new ArrayList<>();
@@ -330,12 +352,14 @@ class LeaseManagerTest {
 
         @Override
         public List<AddonBotSnapshot> bots() {
-            return states.keySet().stream().map(id -> new AddonBotSnapshot(id, id, states.get(id))).toList();
+            return states.keySet().stream().map(id -> new AddonBotSnapshot(id, id, states.get(id),
+                authentication.getOrDefault(id, false))).toList();
         }
 
         @Override
         public Optional<AddonBotSnapshot> bot(String id) {
-            return Optional.ofNullable(states.get(id)).map(state -> new AddonBotSnapshot(id, id, state));
+            return Optional.ofNullable(states.get(id)).map(state -> new AddonBotSnapshot(id, id, state,
+                authentication.getOrDefault(id, false)));
         }
 
         @Override
