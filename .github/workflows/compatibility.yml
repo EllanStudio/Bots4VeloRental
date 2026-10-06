@@ -1,0 +1,38 @@
+name: Compatibility matrix
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Paper 1.21.8 baseline
+            api: 1.21.8-R0.1-SNAPSHOT
+          - name: Paper 26.3
+            api: 26.3.build.157-beta
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: EllanServer/Bots4Velo
+          ref: v3.0.8
+          path: .deps/Bots4Velo
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - shell: bash
+        run: chmod +x gradlew .deps/Bots4Velo/gradlew
+      - run: .deps/Bots4Velo/gradlew -p .deps/Bots4Velo :addon-api:publishToMavenLocal -PpluginVersion=3.0.8
+      - run: ./gradlew clean check shadowJar --no-daemon -PpaperApiVersion=${{ matrix.api }}

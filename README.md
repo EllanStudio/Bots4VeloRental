@@ -65,7 +65,7 @@ HMAC-SHA256 签名。不要把桥接端口转发到公网。
 
 ## 构建
 
-Paper 桥接直接使用 ExcellentEconomy 2.8.0 API，因此需要 Java 25。Velocity
+Paper 桥接以 Paper API `26.3.build.157-beta` 编译，并直接使用 ExcellentEconomy 2.8.0 API，因此需要 Java 25。Velocity
 Addon 以 Java 21 为目标。AuthMe 更新后的登录流程要求使用包含服务器切换结果
 处理修复的 Bots4Velo API `3.0.8`。构建前先把固定版本的 API 发布到本机：
 
