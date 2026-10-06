@@ -17,7 +17,9 @@ dependencies {
     implementation(project(":common"))
     implementation("org.yaml:snakeyaml:2.5")
 
-    compileOnly("io.papermc.paper:paper-api:26.3.build.157-beta")
+    val paperApiVersion = providers.gradleProperty("paperApiVersion").orElse("26.3.build.157-beta").get()
+
+    compileOnly("io.papermc.paper:paper-api:$paperApiVersion")
     compileOnly("su.nightexpress.excellenteconomy:ExcellentEconomy:2.8.0")
     compileOnly("me.clip:placeholderapi:2.11.6")
 
