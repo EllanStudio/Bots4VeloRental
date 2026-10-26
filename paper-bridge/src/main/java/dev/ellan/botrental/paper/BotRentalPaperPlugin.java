@@ -55,7 +55,7 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
                 placeholders.register();
             }
             Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::refreshOnlinePlayers, 40L, 100L);
-            getLogger().info("Bots4Velo rental bridge enabled for redstone only.");
+            getLogger().info("Bots4Velo rental bridge enabled for server " + rentalConfig.serverId() + ".");
         }
         catch (Exception failure) {
             getLogger().log(java.util.logging.Level.SEVERE, "Could not enable Bots4Velo rental bridge", failure);
@@ -138,9 +138,9 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    static LocationData location(Location location) {
-        return new LocationData(location.getWorld().getName(), location.getX(), location.getY(), location.getZ(),
-            location.getYaw(), location.getPitch());
+    LocationData location(Location location) {
+        return new LocationData(rentalConfig.serverId(), location.getWorld().getName(),
+            location.getX(), location.getY(), location.getZ(), location.getYaw(), location.getPitch());
     }
 
     static String color(String value) {

@@ -29,6 +29,7 @@ final class BridgeHttpServer implements AutoCloseable {
     private final EconomyService economy;
     private final RefundLedger refunds;
     private final Set<String> botUsernames;
+    private final String serverId;
     private final HttpServer server;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -37,6 +38,7 @@ final class BridgeHttpServer implements AutoCloseable {
         this.plugin = plugin;
         this.economy = economy;
         this.refunds = refunds;
+        this.serverId = config.serverId();
         this.botUsernames = config.botUsernames().stream()
             .map(name -> name.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toUnmodifiableSet());
         this.server = HttpServer.create(new InetSocketAddress(config.bindAddress(), config.bridgePort()), 16);
@@ -76,6 +78,10 @@ final class BridgeHttpServer implements AutoCloseable {
             || !botUsernames.contains(request.botUsername().toLowerCase(Locale.ROOT))) {
             return BridgeResponse.fail("INVALID_BOT", "Invalid rental bot");
         }
+        if (!serverId.equals(request.location().server())) {
+            return BridgeResponse.fail("WRONG_SERVER", "Placement is for " + request.location().server()
+                + ", this bridge is " + serverId);
+        }
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
@@ -87,7 +93,7 @@ final class BridgeHttpServer implements AutoCloseable {
         });
         return result.get(5, TimeUnit.SECONDS)
             ? BridgeResponse.ok("Bot placed")
-            : BridgeResponse.fail("BOT_NOT_READY", "Bot is not online on redstone");
+            : BridgeResponse.fail("BOT_NOT_READY", "Bot is not online on " + serverId);
     }
 
     private boolean placeNow(String username, LocationData requested) {

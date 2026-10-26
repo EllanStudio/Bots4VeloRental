@@ -83,6 +83,7 @@ items:
         - '&7预存余额：&e%botrental_slot_1_reserve%'
         - '&7当前费率：&f%botrental_slot_1_rate%/分钟'
         - '&7预计剩余：&f%botrental_slot_1_minutes% 分钟'
+        - '&7服务器：&f%botrental_slot_1_server%'
         - '&7位置：&f%botrental_slot_1_location%'
   slot_1_move:
     slot: 29
@@ -119,6 +120,7 @@ items:
         - '&7预存余额：&e%botrental_slot_2_reserve%'
         - '&7当前费率：&f%botrental_slot_2_rate%/分钟'
         - '&7预计剩余：&f%botrental_slot_2_minutes% 分钟'
+        - '&7服务器：&f%botrental_slot_2_server%'
         - '&7位置：&f%botrental_slot_2_location%'
   slot_2_move:
     slot: 38
@@ -155,6 +157,7 @@ items:
         - '&7预存余额：&e%botrental_slot_3_reserve%'
         - '&7当前费率：&f%botrental_slot_3_rate%/分钟'
         - '&7预计剩余：&f%botrental_slot_3_minutes% 分钟'
+        - '&7服务器：&f%botrental_slot_3_server%'
         - '&7位置：&f%botrental_slot_3_location%'
   slot_3_move:
     slot: 47

@@ -101,6 +101,10 @@ final class LeaseManager implements AutoCloseable {
             || request.location() == null || request.ownerName() == null || request.ownerName().isBlank()) {
             return ActionResponse.fail("BAD_REQUEST", "租赁信息不完整。");
         }
+        if (!config.allows(request.location().server())) {
+            return ActionResponse.failWithRefund("SERVER_NOT_ALLOWED", "当前服务器不支持租赁机器人。",
+                Math.max(0, request.reserveCoins()));
+        }
         if (request.reserveCoins() < config.onlineRate()) {
             return ActionResponse.failWithRefund("RESERVE_TOO_SMALL", "预存金额不足一分钟在线费用。",
                 Math.max(0, request.reserveCoins()));
@@ -219,6 +223,28 @@ final class LeaseManager implements AutoCloseable {
         if (lease == null || request.location() == null) {
             return ActionResponse.fail("NOT_FOUND", "没有找到这个租赁位。");
         }
+        // Refund idempotency is recorded per bridge, so the server a pending
+        // refund is sent to must never change underneath it.
+        if (lease.state == LeaseState.REFUND_PENDING) {
+            return ActionResponse.fail("NOT_FOUND", "这个租赁已经结束。");
+        }
+        if (!config.allows(request.location().server())) {
+            return ActionResponse.fail("SERVER_NOT_ALLOWED", "当前服务器不支持租赁机器人。");
+        }
+        if (!request.location().server().equals(lease.location.server())) {
+            // Moving to another backend: let tickStarting switch servers and
+            // place the bot there.  Billing pauses until it arrives, exactly as
+            // it does after an unexpected disconnect.
+            lease.location = request.location();
+            lease.serverSwitchGeneration++;
+            lease.serverSwitchInFlight = false;
+            lease.state = LeaseState.STARTING;
+            lease.startDeadline = now() + config.startupTimeoutSeconds() * 1000;
+            lease.lastActionAt = 0;
+            lease.nextChargeAt = Math.max(lease.nextChargeAt, now() + config.billingPeriodSeconds() * 1000);
+            save(lease);
+            return ActionResponse.ok("机器人正在前往新的服务器。", view(lease));
+        }
         try {
             if (lease.state == LeaseState.ACTIVE && !bridge.place(
                 lease.id, lease.botUsername, lease.ownerUuid, request.location())) {
@@ -230,7 +256,7 @@ final class LeaseManager implements AutoCloseable {
         }
         catch (Exception failure) {
             logger.error("Could not relocate lease " + lease.id, failure);
-            return ActionResponse.fail("BRIDGE_UNAVAILABLE", "红石服位置服务暂时不可用。");
+            return ActionResponse.fail("BRIDGE_UNAVAILABLE", "位置服务暂时不可用。");
         }
     }
 
@@ -300,6 +326,10 @@ final class LeaseManager implements AutoCloseable {
             beginEnd(lease, "BOT_MISSING", "机器人配置缺失，预存金币将全部退回。");
             return;
         }
+        if (!config.allows(lease.location.server())) {
+            beginEnd(lease, "SERVER_REMOVED", "该服务器已停止机器人租赁，预存金币将全部退回。");
+            return;
+        }
         if (snapshot.state() != AddonBotState.PLAY) {
             if (lease.serverSwitchInFlight) {
                 return;
@@ -339,7 +369,7 @@ final class LeaseManager implements AutoCloseable {
             }
         }
         String server = bots.currentServer(lease.botId).orElse("");
-        if (!server.equalsIgnoreCase(config.allowedServer())) {
+        if (!server.equalsIgnoreCase(lease.location.server())) {
             if (!lease.serverSwitchInFlight && now - lease.lastActionAt >= 5_000) {
                 requestServerSwitch(lease, now);
             }
@@ -359,7 +389,7 @@ final class LeaseManager implements AutoCloseable {
 
         CompletionStage<AddonServerSwitchResult> request;
         try {
-            request = bots.switchServer(lease.botId, config.allowedServer());
+            request = bots.switchServer(lease.botId, lease.location.server());
         }
         catch (RuntimeException failure) {
             if (lease.serverSwitchGeneration == generation) {
@@ -425,7 +455,7 @@ final class LeaseManager implements AutoCloseable {
         AddonBotSnapshot snapshot = bots.bot(lease.botId).orElse(null);
         String server = bots.currentServer(lease.botId).orElse("");
         if (snapshot == null || snapshot.state() != AddonBotState.PLAY
-            || !server.equalsIgnoreCase(config.allowedServer())) {
+            || !server.equalsIgnoreCase(lease.location.server())) {
             lease.state = LeaseState.STARTING;
             lease.startDeadline = now() + config.startupTimeoutSeconds() * 1000;
             lease.lastActionAt = 0;
@@ -463,7 +493,7 @@ final class LeaseManager implements AutoCloseable {
 
     private void tryRefund(Lease lease) {
         try {
-            if (lease.reserveCoins > 0 && !bridge.refund(lease.refundId, lease.id,
+            if (lease.reserveCoins > 0 && !bridge.refund(lease.location.server(), lease.refundId, lease.id,
                 lease.ownerUuid, lease.reserveCoins, lease.endReason)) {
                 return;
             }

@@ -43,10 +43,8 @@ public final class BotRentalAddon implements Bots4VeloAddon {
         context = supplied;
         Files.createDirectories(context.dataDirectory());
         RentalConfig config = RentalConfig.load(context.dataDirectory());
-        if (config.pool().size() != 10 || config.maxPerPlayer() != 3
-            || !config.allowedServer().equalsIgnoreCase("redstone")) {
-            throw new IllegalArgumentException(
-                "this deployment requires pool=10, max-per-player=3 and allowed-server=redstone");
+        if (config.pool().size() != 10 || config.maxPerPlayer() != 3) {
+            throw new IllegalArgumentException("this deployment requires pool=10 and max-per-player=3");
         }
         LeaseStore store = new LeaseStore(context.dataDirectory().resolve("rentals.db"));
         leases = new LeaseManager(config, context.bots(), new HttpRentalBridge(config), store, context.logger());
@@ -61,7 +59,7 @@ public final class BotRentalAddon implements Bots4VeloAddon {
             Thread.ofPlatform().name("bot-rental-tick").daemon(true).factory());
         scheduler.scheduleAtFixedRate(leases::tick, 1, 1, TimeUnit.SECONDS);
         context.logger().info("Rental service listening on " + config.bindAddress() + ":" + config.port()
-            + " with " + config.pool().size() + " redstone bot slots");
+            + " with " + config.pool().size() + " bot slots shared by " + config.bridges().keySet());
     }
 
     @Override

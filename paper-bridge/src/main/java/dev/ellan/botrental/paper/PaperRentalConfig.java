@@ -3,7 +3,10 @@ package dev.ellan.botrental.paper;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 record PaperRentalConfig(
@@ -16,11 +19,13 @@ record PaperRentalConfig(
     String sharedSecret,
     List<Integer> rentOptions,
     List<Long> topUpOptions,
-    Set<String> botUsernames
+    Set<String> botUsernames,
+    /** Lower-case server id to the name players see, e.g. redstone -> 赤铁原. */
+    Map<String, String> serverDisplayNames
 ) {
     static PaperRentalConfig load(FileConfiguration config) {
         PaperRentalConfig result = new PaperRentalConfig(
-            config.getString("server-id", ""),
+            config.getString("server-id", "").trim().toLowerCase(Locale.ROOT),
             config.getString("currency", ""),
             config.getString("menu-name", "bot_rental"),
             config.getString("addon.base-url", ""),
@@ -29,14 +34,15 @@ record PaperRentalConfig(
             config.getString("bridge.shared-secret", ""),
             config.getIntegerList("rent-options-minutes"),
             config.getLongList("topup-options-coins"),
-            new HashSet<>(config.getStringList("bot-usernames")));
+            new HashSet<>(config.getStringList("bot-usernames")),
+            displayNames(config));
         result.validate();
         return result;
     }
 
     private void validate() {
-        if (!serverId.equalsIgnoreCase("redstone")) {
-            throw new IllegalArgumentException("server-id must be redstone");
+        if (serverId.isBlank()) {
+            throw new IllegalArgumentException("server-id must match this backend's name in Velocity");
         }
         if (currency.isBlank() || menuName.isBlank() || addonBaseUrl.isBlank()) {
             throw new IllegalArgumentException("currency, menu-name and addon.base-url are required");
@@ -54,5 +60,20 @@ record PaperRentalConfig(
             || botUsernames.size() != 10) {
             throw new IllegalArgumentException("rent options, top-up options and exactly 10 bot usernames are required");
         }
+    }
+
+    String displayName(String server) {
+        return serverDisplayNames.getOrDefault(server.toLowerCase(Locale.ROOT), server);
+    }
+
+    private static Map<String, String> displayNames(FileConfiguration config) {
+        Map<String, String> names = new LinkedHashMap<>();
+        var section = config.getConfigurationSection("server-display-names");
+        if (section != null) {
+            for (String key : section.getKeys(false)) {
+                names.put(key.toLowerCase(Locale.ROOT), section.getString(key, key));
+            }
+        }
+        return Map.copyOf(names);
     }
 }

@@ -71,7 +71,7 @@ final class RentalPlaceholders extends PlaceholderExpansion {
         if (lease == null) {
             return switch (parts[2]) {
                 case "status" -> "空闲";
-                case "bot" -> "暂无";
+                case "bot", "server" -> "暂无";
                 default -> "0";
             };
         }
@@ -83,6 +83,7 @@ final class RentalPlaceholders extends PlaceholderExpansion {
             case "rate" -> Long.toString(lease.currentRate());
             case "minutes" -> Long.toString(lease.estimatedMinutes());
             case "world" -> lease.location().world();
+            case "server" -> plugin.rentalConfig().displayName(lease.location().server());
             case "location" -> String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f",
                 lease.location().world(), lease.location().x(), lease.location().y(), lease.location().z());
             default -> "";

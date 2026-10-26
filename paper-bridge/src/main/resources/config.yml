@@ -1,3 +1,4 @@
+# Must match this backend's server name in Velocity and its key under the addon's bridge.servers.
 server-id: "redstone"
 currency: "ellan_coin"
 menu-name: "zmenu:机器人租赁"
@@ -5,6 +6,7 @@ addon:
   base-url: "http://127.0.0.1:18765"
 bridge:
   bind-address: "127.0.0.1"
+  # Use a different port on every backend (redstone 18766, survival 18767).
   port: 18766
   shared-secret: "CHANGE_ME_TO_AT_LEAST_32_RANDOM_CHARACTERS"
 rent-options-minutes: [30, 60, 120]
@@ -20,3 +22,6 @@ bot-usernames:
   - "BOT_8"
   - "BOT_9"
   - "BOT_10"
+server-display-names:
+  redstone: "赤铁原"
+  survival: "栖风谷"

@@ -49,7 +49,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
                 plugin.message(player.getUniqueId(), "&c可选租期：" + plugin.rentalConfig().rentOptions());
                 return true;
             }
-            LocationData location = BotRentalPaperPlugin.location(player.getLocation());
+            LocationData location = plugin.location(player.getLocation());
             submit(player, () -> rent(player.getUniqueId(), player.getName(), minutes, location));
             return true;
         }
@@ -63,7 +63,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
         if (args[0].equalsIgnoreCase("relocate") && args.length == 2) {
             Integer slot = slot(args[1]);
             if (slot != null) {
-                LocationData location = BotRentalPaperPlugin.location(player.getLocation());
+                LocationData location = plugin.location(player.getLocation());
                 submit(player, () -> relocate(player.getUniqueId(), slot, location));
                 return true;
             }
@@ -118,6 +118,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
             }
             for (LeaseView lease : status.leases()) {
                 plugin.message(playerId, "&7租赁位 " + lease.slot() + "：&f" + lease.botUsername()
+                    + " &7位于 &f" + plugin.rentalConfig().displayName(lease.location().server())
                     + " &7状态 &f" + stateName(lease.state()) + " &7余额 &e" + lease.reserveCoins()
                     + " &7约 " + lease.estimatedMinutes() + " 分钟");
             }

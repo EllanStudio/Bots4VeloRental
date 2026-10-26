@@ -2,10 +2,13 @@ http:
   bind-address: "127.0.0.1"
   port: 18765
 bridge:
-  base-url: "http://127.0.0.1:18766"
   shared-secret: "CHANGE_ME_TO_AT_LEAST_32_RANDOM_CHARACTERS"
+  # Backends where bots may be rented, each with its own Paper bridge.
+  # The BOT_1..BOT_10 pool is shared: a bot goes to whichever server it was rented on.
+  servers:
+    redstone: "http://127.0.0.1:18766"
+    survival: "http://127.0.0.1:18767"
 rental:
-  allowed-server: "redstone"
   currency: "ellan_coin"
   online-rate-per-minute: 5
   offline-rate-per-minute: 20

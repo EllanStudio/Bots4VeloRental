@@ -2,6 +2,7 @@ package dev.ellan.botrental.velocity;
 
 import dev.ellan.botrental.common.ApiMessages.CreateRequest;
 import dev.ellan.botrental.common.ApiMessages.OwnerSlotRequest;
+import dev.ellan.botrental.common.ApiMessages.RelocateRequest;
 import dev.ellan.botrental.common.ApiMessages.StatusRequest;
 import dev.ellan.botrental.common.LocationData;
 import dev.nulli0n.vbot.addon.api.AddonBotEvent;
@@ -14,7 +15,9 @@ import dev.nulli0n.vbot.addon.api.AddonServerSwitchStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -254,6 +257,148 @@ class LeaseManagerTest {
         rig.close();
     }
 
+    @Test
+    void survivalLeaseSwitchesTheBotToSurvival() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        rig.bots.online.put(owner, true);
+        var created = rig.manager.create(request(owner, 30, "survival"));
+        assertThat(created.success()).isTrue();
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "redstone");
+        authenticate(rig, botId);
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.servers.get(botId)).isEqualTo("survival");
+
+        rig.manager.tick();
+        assertThat(rig.bridge.placements).containsExactly("survival");
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases().getFirst().state())
+            .isEqualTo(LeaseState.ACTIVE.name());
+        rig.close();
+    }
+
+    @Test
+    void rejectsServersWithoutABridgeAndRefundsInFull() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        var created = rig.manager.create(request(owner, 30, "spawn"));
+        assertThat(created.success()).isFalse();
+        assertThat(created.code()).isEqualTo("SERVER_NOT_ALLOWED");
+        assertThat(created.refundableCoins()).isEqualTo(30);
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases()).isEmpty();
+        rig.close();
+    }
+
+    @Test
+    void sharesOnePoolAcrossServers() throws Exception {
+        TestRig rig = rig();
+        for (int index = 0; index < 5; index++) {
+            assertThat(rig.manager.create(request(UUID.randomUUID(), 30, "redstone")).success()).isTrue();
+            assertThat(rig.manager.create(request(UUID.randomUUID(), 30, "survival")).success()).isTrue();
+        }
+        var eleventh = rig.manager.create(request(UUID.randomUUID(), 30, "survival"));
+        assertThat(eleventh.code()).isEqualTo("POOL_FULL");
+        rig.close();
+    }
+
+    @Test
+    void relocatingToAnotherServerPausesBillingAndMovesTheBot() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        rig.bots.online.put(owner, true);
+        var created = rig.manager.create(request(owner, 30));
+        String botId = created.lease().botId();
+        rig.bots.states.put(botId, AddonBotState.PLAY);
+        rig.bots.servers.put(botId, "redstone");
+        authenticate(rig, botId);
+        rig.manager.tick();
+        assertThat(rig.manager.status(new StatusRequest(owner)).leases().getFirst().reserveCoins()).isEqualTo(25);
+
+        var moved = rig.manager.relocate(new RelocateRequest(UUID.randomUUID(), owner, 1, location("survival")));
+        assertThat(moved.success()).isTrue();
+        assertThat(moved.lease().state()).isEqualTo(LeaseState.STARTING.name());
+
+        rig.clock.advanceSeconds(5);
+        rig.manager.tick();
+        assertThat(rig.bots.servers.get(botId)).isEqualTo("survival");
+        rig.manager.tick();
+        var lease = rig.manager.status(new StatusRequest(owner)).leases().getFirst();
+        assertThat(lease.state()).isEqualTo(LeaseState.ACTIVE.name());
+        assertThat(lease.location().server()).isEqualTo("survival");
+        assertThat(lease.reserveCoins()).as("the first minute is not charged twice").isEqualTo(25);
+        assertThat(rig.bridge.placements).containsExactly("redstone", "survival");
+
+        rig.manager.cancel(new OwnerSlotRequest(UUID.randomUUID(), owner, 1));
+        assertThat(rig.bridge.refundServers).containsExactly("survival");
+        rig.close();
+    }
+
+    @Test
+    void relocateIsRejectedWhileARefundIsPending() throws Exception {
+        TestRig rig = rig();
+        UUID owner = UUID.randomUUID();
+        rig.manager.create(request(owner, 30));
+        rig.bridge.failRefunds = true;
+        rig.manager.cancel(new OwnerSlotRequest(UUID.randomUUID(), owner, 1));
+
+        var moved = rig.manager.relocate(new RelocateRequest(UUID.randomUUID(), owner, 1, location("survival")));
+        assertThat(moved.success()).isFalse();
+
+        rig.bridge.failRefunds = false;
+        rig.manager.tick();
+        assertThat(rig.bridge.refundServers).containsExactly("redstone");
+        rig.close();
+    }
+
+    @Test
+    void migratesLeasesFromBeforeMultiServerSupportToRedstone() throws Exception {
+        Path database = temp.resolve("legacy.db");
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+             var statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE leases (
+                  lease_id TEXT PRIMARY KEY, owner_uuid TEXT NOT NULL, owner_name TEXT NOT NULL,
+                  slot INTEGER NOT NULL, bot_id TEXT NOT NULL, bot_username TEXT NOT NULL,
+                  reserve_coins INTEGER NOT NULL, spent_coins INTEGER NOT NULL, state TEXT NOT NULL,
+                  world TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,
+                  yaw REAL NOT NULL, pitch REAL NOT NULL, charged_once INTEGER NOT NULL,
+                  created_at INTEGER NOT NULL, next_charge_at INTEGER NOT NULL,
+                  start_deadline INTEGER NOT NULL, last_action_at INTEGER NOT NULL,
+                  refund_id TEXT, end_reason TEXT NOT NULL)
+                """);
+            statement.execute("INSERT INTO leases VALUES ('" + UUID.randomUUID() + "', '" + UUID.randomUUID()
+                + "', 'Player', 1, 'BOT_1', 'BOT_1', 30, 0, 'ACTIVE', 'world', 1, 64, 2, 0, 0, 1, 0, 0, 0, 0, NULL, '')");
+        }
+        try (LeaseStore store = new LeaseStore(database)) {
+            assertThat(store.loadOpen()).singleElement()
+                .satisfies(lease -> assertThat(lease.location.server()).isEqualTo("redstone"));
+        }
+    }
+
+    @Test
+    void readsTheSingleServerConfigFromBeforeMultiServerSupport() throws Exception {
+        Files.writeString(temp.resolve("config.yml"), """
+            http: {bind-address: "127.0.0.1", port: 18765}
+            bridge: {base-url: "http://127.0.0.1:18766", shared-secret: "01234567890123456789012345678901"}
+            rental:
+              allowed-server: "redstone"
+              currency: "ellan_coin"
+              online-rate-per-minute: 5
+              offline-rate-per-minute: 20
+              max-per-player: 3
+              billing-period-seconds: 60
+              startup-timeout-seconds: 90
+              pool: ["BOT_1"]
+            """);
+        RentalConfig config = RentalConfig.load(temp);
+        assertThat(config.bridges()).containsExactly(Map.entry("redstone", "http://127.0.0.1:18766"));
+        assertThat(config.allows("Redstone")).isTrue();
+        assertThat(config.allows("survival")).isFalse();
+    }
+
     private static AddonServerSwitchResult switchResult(String botId) {
         return new AddonServerSwitchResult(
             AddonServerSwitchStatus.SWITCHED, botId, botId, "redstone", "SUCCESS");
@@ -265,8 +410,9 @@ class LeaseManagerTest {
     }
 
     private TestRig rig() throws Exception {
-        RentalConfig config = new RentalConfig("127.0.0.1", 18765, "http://127.0.0.1:18766",
-            "01234567890123456789012345678901", "redstone", "ellan_coin", 5, 20, 3,
+        RentalConfig config = new RentalConfig("127.0.0.1", 18765, "01234567890123456789012345678901",
+            Map.of("redstone", "http://127.0.0.1:18766", "survival", "http://127.0.0.1:18767"),
+            "ellan_coin", 5, 20, 3,
             60, 90, IntStream.rangeClosed(1, 10).mapToObj(index -> "BOT_" + index).toList());
         FakeBots bots = new FakeBots(config.pool());
         FakeBridge bridge = new FakeBridge();
@@ -277,8 +423,15 @@ class LeaseManagerTest {
     }
 
     private static CreateRequest request(UUID owner, long reserve) {
-        return new CreateRequest(UUID.randomUUID(), owner, "Player", reserve,
-            new LocationData("world", 1, 64, 2, 0, 0));
+        return request(owner, reserve, "redstone");
+    }
+
+    private static CreateRequest request(UUID owner, long reserve, String server) {
+        return new CreateRequest(UUID.randomUUID(), owner, "Player", reserve, location(server));
+    }
+
+    private static LocationData location(String server) {
+        return new LocationData(server, "world", 1, 64, 2, 0, 0);
     }
 
     private record TestRig(LeaseManager manager, FakeBots bots, FakeBridge bridge, MutableClock clock)
@@ -323,15 +476,24 @@ class LeaseManagerTest {
 
     private static final class FakeBridge implements RentalBridge {
         private final List<Long> refunds = new ArrayList<>();
+        private final List<String> refundServers = new ArrayList<>();
+        private final List<String> placements = new ArrayList<>();
+        private boolean failRefunds;
 
         @Override
         public boolean place(UUID leaseId, String botUsername, UUID ownerUuid, LocationData location) {
+            placements.add(location.server());
             return true;
         }
 
         @Override
-        public boolean refund(UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) {
+        public boolean refund(String server, UUID refundId, UUID leaseId, UUID ownerUuid, long coins,
+                              String reason) {
+            if (failRefunds) {
+                return false;
+            }
             refunds.add(coins);
+            refundServers.add(server);
             return true;
         }
     }

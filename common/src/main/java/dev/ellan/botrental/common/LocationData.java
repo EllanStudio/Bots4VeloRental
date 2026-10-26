@@ -1,7 +1,13 @@
 package dev.ellan.botrental.common;
 
-public record LocationData(String world, double x, double y, double z, float yaw, float pitch) {
+import java.util.Locale;
+
+public record LocationData(String server, String world, double x, double y, double z, float yaw, float pitch) {
     public LocationData {
+        server = server == null ? "" : server.trim().toLowerCase(Locale.ROOT);
+        if (server.isEmpty()) {
+            throw new IllegalArgumentException("server is required");
+        }
         world = world == null ? "" : world.trim();
         if (world.isEmpty()) {
             throw new IllegalArgumentException("world is required");

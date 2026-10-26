@@ -33,6 +33,7 @@ final class LeaseStore implements AutoCloseable {
                   reserve_coins INTEGER NOT NULL,
                   spent_coins INTEGER NOT NULL,
                   state TEXT NOT NULL,
+                  server TEXT NOT NULL DEFAULT 'redstone',
                   world TEXT NOT NULL,
                   x REAL NOT NULL,
                   y REAL NOT NULL,
@@ -48,9 +49,25 @@ final class LeaseStore implements AutoCloseable {
                   end_reason TEXT NOT NULL
                 )
                 """);
+            // Databases created before multi-server support only ever held
+            // redstone leases.
+            if (!hasColumn(statement, "server")) {
+                statement.execute("ALTER TABLE leases ADD COLUMN server TEXT NOT NULL DEFAULT 'redstone'");
+            }
             statement.execute("CREATE INDEX IF NOT EXISTS leases_owner_state ON leases(owner_uuid, state)");
             statement.execute("CREATE INDEX IF NOT EXISTS leases_bot_state ON leases(bot_id, state)");
         }
+    }
+
+    private static boolean hasColumn(Statement statement, String column) throws SQLException {
+        try (ResultSet columns = statement.executeQuery("PRAGMA table_info(leases)")) {
+            while (columns.next()) {
+                if (column.equalsIgnoreCase(columns.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     synchronized List<Lease> loadOpen() throws SQLException {
@@ -70,7 +87,8 @@ final class LeaseStore implements AutoCloseable {
                         row.getLong("reserve_coins"),
                         row.getLong("spent_coins"),
                         LeaseState.valueOf(row.getString("state")),
-                        new LocationData(row.getString("world"), row.getDouble("x"), row.getDouble("y"),
+                        new LocationData(row.getString("server"), row.getString("world"),
+                            row.getDouble("x"), row.getDouble("y"),
                             row.getDouble("z"), row.getFloat("yaw"), row.getFloat("pitch")),
                         row.getBoolean("charged_once"),
                         row.getLong("created_at"),
@@ -89,13 +107,13 @@ final class LeaseStore implements AutoCloseable {
         String sql = """
             INSERT INTO leases (
               lease_id, owner_uuid, owner_name, slot, bot_id, bot_username,
-              reserve_coins, spent_coins, state, world, x, y, z, yaw, pitch,
+              reserve_coins, spent_coins, state, server, world, x, y, z, yaw, pitch,
               charged_once, created_at, next_charge_at, start_deadline,
               last_action_at, refund_id, end_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(lease_id) DO UPDATE SET
               reserve_coins=excluded.reserve_coins, spent_coins=excluded.spent_coins,
-              state=excluded.state, world=excluded.world, x=excluded.x, y=excluded.y,
+              state=excluded.state, server=excluded.server, world=excluded.world, x=excluded.x, y=excluded.y,
               z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch,
               charged_once=excluded.charged_once, next_charge_at=excluded.next_charge_at,
               start_deadline=excluded.start_deadline, last_action_at=excluded.last_action_at,
@@ -112,6 +130,7 @@ final class LeaseStore implements AutoCloseable {
             statement.setLong(index++, lease.reserveCoins);
             statement.setLong(index++, lease.spentCoins);
             statement.setString(index++, lease.state.name());
+            statement.setString(index++, lease.location.server());
             statement.setString(index++, lease.location.world());
             statement.setDouble(index++, lease.location.x());
             statement.setDouble(index++, lease.location.y());
