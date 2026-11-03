@@ -1,191 +1,170 @@
-name: '&8艾尔岚挂机机器人租赁'
+name: "<dark_green>挂机机器人租赁"
 size: 54
 enable: true
+update-interval: 1000
 
 fillItem:
-  material: 'craftengine:internal:mpty_slot'
-  name: ' '
-  lore:
-    - '&8&m----------------------------'
-    - '&7机器人池：&f%botrental_pool_available%/%botrental_pool_size%'
-    - '&7每人上限：&f%botrental_max_per_player%'
-    - '&7在线费率：&e%botrental_online_rate% 金币/分钟'
-    - '&7离线费率：&c%botrental_offline_rate% 金币/分钟'
-    - '&7离开游戏后预存余额会更快消耗。'
-    - '&8&m----------------------------'
+  material: BLACK_STAINED_GLASS_PANE
+  name: " "
 
 items:
   overview:
     slot: 4
     item:
-      material: PLAYER_HEAD
-      name: '&6你的挂机机器人'
+      material: CLOCK
+      name: "<green>机器人租赁中心"
       lore:
-        - '&7正在租赁：&f%botrental_active_count%/%botrental_max_per_player%'
-        - '&7公共机器人池：&f%botrental_pool_available%/%botrental_pool_size%'
-        - ''
-        - '&7租赁时记录你当前站立的位置。'
-        - '&7机器人真正到达后才开始计费。'
-        - '&7未使用的整数金币会在结束时退回。'
+        - "<gray>可用机器人：<white>%botrental_pool_available%/%botrental_pool_size%"
+        - "<gray>我的租赁：<white>%botrental_active_count%/%botrental_max_per_player%"
+        - "<gray>在线费率：<gold>%botrental_online_rate% 艾尔岚金币/分钟"
+        - "<gray>离线费率：<gold>%botrental_offline_rate% 艾尔岚金币/分钟"
+        - ""
+        - "<yellow>机器人会放置在你当前所在位置。"
 
   rent_30:
-    slot: 20
-    closeInventory: true
+    slot: 11
     item:
-      material: CLOCK
-      name: '&a预存 30 分钟'
-      lore:
-        - '&7在线参考费用：&e150 艾尔岚金币'
-        - '&7在线状态约可运行 &f30 分钟'
-        - '&7离线状态约可运行 &f7 分钟'
-        - ''
-        - '&e点击在当前位置租赁'
-    commands:
-      - 'botrent rent 30'
-
+      material: LIME_DYE
+      name: "<green>租用 30 分钟"
+      lore: ["<gray>按在线费率预存租金", "<yellow>点击租用"]
+    commands: ["botrent rent 30"]
   rent_60:
-    slot: 22
-    closeInventory: true
+    slot: 13
     item:
-      material: COMPASS
-      name: '&a预存 60 分钟'
-      lore:
-        - '&7在线参考费用：&e300 艾尔岚金币'
-        - '&7在线状态约可运行 &f60 分钟'
-        - '&7离线状态约可运行 &f15 分钟'
-        - ''
-        - '&e点击在当前位置租赁'
-    commands:
-      - 'botrent rent 60'
-
+      material: EMERALD
+      name: "<green>租用 60 分钟"
+      lore: ["<gray>按在线费率预存租金", "<yellow>点击租用"]
+    commands: ["botrent rent 60"]
   rent_120:
-    slot: 24
-    closeInventory: true
+    slot: 15
     item:
-      material: RECOVERY_COMPASS
-      name: '&a预存 120 分钟'
-      lore:
-        - '&7在线参考费用：&e600 艾尔岚金币'
-        - '&7在线状态约可运行 &f120 分钟'
-        - '&7离线状态约可运行 &f30 分钟'
-        - ''
-        - '&e点击在当前位置租赁'
-    commands:
-      - 'botrent rent 120'
+      material: EMERALD_BLOCK
+      name: "<green>租用 120 分钟"
+      lore: ["<gray>按在线费率预存租金", "<yellow>点击租用"]
+    commands: ["botrent rent 120"]
 
   slot_1:
-    slot: 28
+    slot: 18
     item:
-      material: ARMOR_STAND
-      name: '&6租赁位 1：&f%botrental_slot_1_status%'
+      material: PLAYER_HEAD
+      name: "<aqua>租赁位 1：%botrental_slot_1_status%"
       lore:
-        - '&7机器人：&f%botrental_slot_1_bot%'
-        - '&7预存余额：&e%botrental_slot_1_reserve%'
-        - '&7当前费率：&f%botrental_slot_1_rate%/分钟'
-        - '&7预计剩余：&f%botrental_slot_1_minutes% 分钟'
-        - '&7位置：&f%botrental_slot_1_location%'
-  slot_1_move:
-    slot: 29
-    closeInventory: true
-    item:
-      material: ENDER_PEARL
-      name: '&b移动租赁位 1'
-      lore: ['&7把机器人移动到你当前站立的位置。', '', '&e点击移动']
-    commands: ['botrent relocate 1']
-  slot_1_topup:
-    slot: 30
-    closeInventory: true
-    item:
-      material: GOLD_INGOT
-      name: '&e为租赁位 1 充值'
-      lore: ['&7充值 &e300 &7枚艾尔岚金币。', '', '&e点击充值']
-    commands: ['botrent topup 1 300']
+        - "<gray>机器人：<white>%botrental_slot_1_bot%"
+        - "<gray>余额：<gold>%botrental_slot_1_reserve%"
+        - "<gray>已消费：<white>%botrental_slot_1_spent%"
+        - "<gray>当前费率：<white>%botrental_slot_1_rate%/分钟"
+        - "<gray>预计剩余：<white>%botrental_slot_1_minutes% 分钟"
+        - "<gray>服务器：<white>%botrental_slot_1_server%"
+        - "<gray>位置：<white>%botrental_slot_1_location%"
+  slot_1_relocate:
+    slot: 19
+    item: {material: COMPASS, name: "<yellow>迁移租赁位 1", lore: ["<gray>移动到你当前所在位置"]}
+    commands: ["botrent relocate 1"]
+  slot_1_topup_150:
+    slot: 20
+    item: {material: GOLD_NUGGET, name: "<gold>充值 150 金币"}
+    commands: ["botrent topup 1 150"]
+  slot_1_topup_300:
+    slot: 21
+    item: {material: GOLD_INGOT, name: "<gold>充值 300 金币"}
+    commands: ["botrent topup 1 300"]
+  slot_1_topup_600:
+    slot: 22
+    item: {material: GOLD_BLOCK, name: "<gold>充值 600 金币"}
+    commands: ["botrent topup 1 600"]
   slot_1_cancel:
-    slot: 31
-    closeInventory: true
-    item:
-      material: BARRIER
-      name: '&c结束租赁位 1'
-      lore: ['&7停止机器人并退回未使用余额。', '', '&c点击结束']
-    commands: ['botrent cancel 1']
+    slot: 26
+    item: {material: BARRIER, name: "<red>结束租赁位 1", lore: ["<gray>未消费余额将按规则退还"]}
+    commands: ["botrent cancel 1"]
 
   slot_2:
-    slot: 37
+    slot: 27
     item:
-      material: ARMOR_STAND
-      name: '&6租赁位 2：&f%botrental_slot_2_status%'
+      material: PLAYER_HEAD
+      name: "<aqua>租赁位 2：%botrental_slot_2_status%"
       lore:
-        - '&7机器人：&f%botrental_slot_2_bot%'
-        - '&7预存余额：&e%botrental_slot_2_reserve%'
-        - '&7当前费率：&f%botrental_slot_2_rate%/分钟'
-        - '&7预计剩余：&f%botrental_slot_2_minutes% 分钟'
-        - '&7位置：&f%botrental_slot_2_location%'
-  slot_2_move:
-    slot: 38
-    closeInventory: true
-    item:
-      material: ENDER_PEARL
-      name: '&b移动租赁位 2'
-      lore: ['&7把机器人移动到你当前站立的位置。', '', '&e点击移动']
-    commands: ['botrent relocate 2']
-  slot_2_topup:
-    slot: 39
-    closeInventory: true
-    item:
-      material: GOLD_INGOT
-      name: '&e为租赁位 2 充值'
-      lore: ['&7充值 &e300 &7枚艾尔岚金币。', '', '&e点击充值']
-    commands: ['botrent topup 2 300']
+        - "<gray>机器人：<white>%botrental_slot_2_bot%"
+        - "<gray>余额：<gold>%botrental_slot_2_reserve%"
+        - "<gray>已消费：<white>%botrental_slot_2_spent%"
+        - "<gray>当前费率：<white>%botrental_slot_2_rate%/分钟"
+        - "<gray>预计剩余：<white>%botrental_slot_2_minutes% 分钟"
+        - "<gray>服务器：<white>%botrental_slot_2_server%"
+        - "<gray>位置：<white>%botrental_slot_2_location%"
+  slot_2_relocate:
+    slot: 28
+    item: {material: COMPASS, name: "<yellow>迁移租赁位 2", lore: ["<gray>移动到你当前所在位置"]}
+    commands: ["botrent relocate 2"]
+  slot_2_topup_150:
+    slot: 29
+    item: {material: GOLD_NUGGET, name: "<gold>充值 150 金币"}
+    commands: ["botrent topup 2 150"]
+  slot_2_topup_300:
+    slot: 30
+    item: {material: GOLD_INGOT, name: "<gold>充值 300 金币"}
+    commands: ["botrent topup 2 300"]
+  slot_2_topup_600:
+    slot: 31
+    item: {material: GOLD_BLOCK, name: "<gold>充值 600 金币"}
+    commands: ["botrent topup 2 600"]
   slot_2_cancel:
-    slot: 40
-    closeInventory: true
-    item:
-      material: BARRIER
-      name: '&c结束租赁位 2'
-      lore: ['&7停止机器人并退回未使用余额。', '', '&c点击结束']
-    commands: ['botrent cancel 2']
+    slot: 35
+    item: {material: BARRIER, name: "<red>结束租赁位 2", lore: ["<gray>未消费余额将按规则退还"]}
+    commands: ["botrent cancel 2"]
 
   slot_3:
-    slot: 46
+    slot: 36
     item:
-      material: ARMOR_STAND
-      name: '&6租赁位 3：&f%botrental_slot_3_status%'
+      material: PLAYER_HEAD
+      name: "<aqua>租赁位 3：%botrental_slot_3_status%"
       lore:
-        - '&7机器人：&f%botrental_slot_3_bot%'
-        - '&7预存余额：&e%botrental_slot_3_reserve%'
-        - '&7当前费率：&f%botrental_slot_3_rate%/分钟'
-        - '&7预计剩余：&f%botrental_slot_3_minutes% 分钟'
-        - '&7位置：&f%botrental_slot_3_location%'
-  slot_3_move:
-    slot: 47
-    closeInventory: true
-    item:
-      material: ENDER_PEARL
-      name: '&b移动租赁位 3'
-      lore: ['&7把机器人移动到你当前站立的位置。', '', '&e点击移动']
-    commands: ['botrent relocate 3']
-  slot_3_topup:
-    slot: 48
-    closeInventory: true
-    item:
-      material: GOLD_INGOT
-      name: '&e为租赁位 3 充值'
-      lore: ['&7充值 &e300 &7枚艾尔岚金币。', '', '&e点击充值']
-    commands: ['botrent topup 3 300']
+        - "<gray>机器人：<white>%botrental_slot_3_bot%"
+        - "<gray>余额：<gold>%botrental_slot_3_reserve%"
+        - "<gray>已消费：<white>%botrental_slot_3_spent%"
+        - "<gray>当前费率：<white>%botrental_slot_3_rate%/分钟"
+        - "<gray>预计剩余：<white>%botrental_slot_3_minutes% 分钟"
+        - "<gray>服务器：<white>%botrental_slot_3_server%"
+        - "<gray>位置：<white>%botrental_slot_3_location%"
+  slot_3_relocate:
+    slot: 37
+    item: {material: COMPASS, name: "<yellow>迁移租赁位 3", lore: ["<gray>移动到你当前所在位置"]}
+    commands: ["botrent relocate 3"]
+  slot_3_topup_150:
+    slot: 38
+    item: {material: GOLD_NUGGET, name: "<gold>充值 150 金币"}
+    commands: ["botrent topup 3 150"]
+  slot_3_topup_300:
+    slot: 39
+    item: {material: GOLD_INGOT, name: "<gold>充值 300 金币"}
+    commands: ["botrent topup 3 300"]
+  slot_3_topup_600:
+    slot: 40
+    item: {material: GOLD_BLOCK, name: "<gold>充值 600 金币"}
+    commands: ["botrent topup 3 600"]
   slot_3_cancel:
-    slot: 49
-    closeInventory: true
+    slot: 44
+    item: {material: BARRIER, name: "<red>结束租赁位 3", lore: ["<gray>未消费余额将按规则退还"]}
+    commands: ["botrent cancel 3"]
+
+  long_term:
+    slot: 8
     item:
-      material: BARRIER
-      name: '&c结束租赁位 3'
-      lore: ['&7停止机器人并退回未使用余额。', '', '&c点击结束']
-    commands: ['botrent cancel 3']
+      material: ENDER_EYE
+      name: "<light_purple>长期挂机套餐"
+      lore:
+        - "<gray>按天购买，价格比按分钟租便宜得多"
+        - "<gray>可选加载范围，还可以选战斗型"
+        - "<gray>长期挂机池：<white>%botrental_pack_pool_available%/%botrental_pack_pool_size%"
+        - "<yellow>点击查看"
+    actions:
+      - type: inventory
+        inventory: "机器人长期挂机"
 
   refresh:
-    slot: 53
-    closeInventory: true
+    slot: 49
     item:
       material: SUNFLOWER
-      name: '&e刷新状态'
-      lore: ['&7关闭菜单并重新读取租赁状态。']
-    commands: ['botrent status']
+      name: "<green>刷新状态"
+      lore: ["<gray>重新获取机器人池与租赁状态"]
+    commands: ["botrent status"]
+    actions:
+      - type: refresh inventory

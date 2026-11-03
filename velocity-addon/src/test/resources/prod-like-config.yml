@@ -1,0 +1,59 @@
+http:
+  bind-address: "127.0.0.1"
+  port: 18765
+bridge:
+  base-url: "http://127.0.0.1:18766"
+  # 1.3.0+: one Paper bridge per backend; base-url/allowed-server are kept for older addons.
+  servers:
+    redstone: "http://127.0.0.1:18766"
+    survival: "http://127.0.0.1:18767"
+  shared-secret: "TEST_FIXTURE_SECRET_0123456789_abcdefghij"
+rental:
+  allowed-server: "redstone"
+  currency: "ellan_coin"
+  online-rate-per-minute: 5
+  offline-rate-per-minute: 20
+  max-per-player: 3
+  billing-period-seconds: 60
+  startup-timeout-seconds: 90
+  pool:
+    - "BOT_1"
+    - "BOT_2"
+    - "BOT_3"
+    - "BOT_4"
+    - "BOT_5"
+    - "BOT_6"
+    - "BOT_7"
+    - "BOT_8"
+    - "BOT_9"
+    - "BOT_10"
+
+# Long-term prepaid packages (1.4.0). The addon owns this price table; the paper bridges only display it.
+packages:
+  enabled: true
+  pool:
+    - "BOT_11"
+    - "BOT_12"
+    - "BOT_13"
+    - "BOT_14"
+    - "BOT_15"
+    - "BOT_16"
+    - "BOT_17"
+    - "BOT_18"
+    - "BOT_19"
+    - "BOT_20"
+    - "BOT_21"
+    - "BOT_22"
+  max-per-player: 3
+  max-combat: 4
+  allowed-servers: [redstone, survival]
+  refund-percent: 80            # of the unused whole days when a running package is cancelled
+  combat-surcharge-percent: 50
+  durations:                    # days bought : days charged
+    1: 1
+    7: 6
+    30: 20
+  tiers:                        # load radius = simulation-distance chunks around the bot
+    small:  {name: 小, simulation-distance: 3, view-distance: 4,  day-price: 450}
+    medium: {name: 中, simulation-distance: 5, view-distance: 7,  day-price: 900}
+    large:  {name: 大, simulation-distance: 8, view-distance: 10, day-price: 1800}

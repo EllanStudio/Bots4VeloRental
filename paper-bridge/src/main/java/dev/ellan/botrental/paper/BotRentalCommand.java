@@ -21,6 +21,12 @@ import org.bukkit.entity.Player;
 final class BotRentalCommand implements CommandExecutor, TabCompleter {
    private final BotRentalPaperPlugin plugin;
    private final Set<UUID> busy = Collections.synchronizedSet(new HashSet<>());
+   /** A package purchase needs a second identical command within this long; one mis-click must not cost 36000 coins. */
+   private static final long CONFIRM_WINDOW_MILLIS = 30_000L;
+   private record PendingPurchase(String key, long expiresAt) {
+   }
+
+   private final java.util.Map<UUID, PendingPurchase> pendingPurchases = new java.util.concurrent.ConcurrentHashMap<>();
 
    BotRentalCommand(BotRentalPaperPlugin var1) {
       this.plugin = var1;
@@ -228,6 +234,17 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
          }
 
          long price = combat ? offer.combatPrice() : offer.price();
+         String purchaseKey = offer.tier() + "|" + days + "|" + combat;
+         long nowMillis = System.currentTimeMillis();
+         PendingPurchase pending = this.pendingPurchases.get(id);
+         if (pending == null || !pending.key().equals(purchaseKey) || pending.expiresAt() < nowMillis) {
+            this.pendingPurchases.put(id, new PendingPurchase(purchaseKey, nowMillis + CONFIRM_WINDOW_MILLIS));
+            this.plugin.message(id, "&e\u5c06\u82b1\u8d39 &6" + price + " &e\u91d1\u5e01\u8d2d\u4e70\u3010" + offer.tierName() + "\u00b7" + days + "\u5929"
+               + (combat ? "\u00b7\u6218\u6597" : "") + "\u3011\uff0c\u673a\u5668\u4eba\u4f1a\u653e\u5728\u4f60\u5f53\u524d\u4f4d\u7f6e\u3002&e30 \u79d2\u5185\u518d\u70b9\u4e00\u6b21\u786e\u8ba4\u3002");
+            return;
+         }
+
+         this.pendingPurchases.remove(id);
          if (this.plugin.economy().balance(id).get(8L, TimeUnit.SECONDS) < price) {
             this.plugin.message(id, "&c\u4f59\u989d\u4e0d\u8db3\uff0c\u672c\u6b21\u9700\u8981 " + price + " \u679a\u827e\u5c14\u5c9a\u91d1\u5e01\u3002");
             return;

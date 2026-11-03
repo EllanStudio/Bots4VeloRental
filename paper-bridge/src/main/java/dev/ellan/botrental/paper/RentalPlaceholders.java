@@ -47,6 +47,10 @@ final class RentalPlaceholders extends PlaceholderExpansion {
       }
 
       String var4 = var2.toLowerCase(Locale.ROOT);
+      if (var4.startsWith("offer_")) {
+         return offerValue(var3, var4);
+      }
+
 
       return switch (var4) {
          case "pool_available" -> Integer.toString(var3.poolAvailable());
@@ -61,6 +65,45 @@ final class RentalPlaceholders extends PlaceholderExpansion {
          case "pack_active_count" -> Long.toString(var3.leases().stream().filter(LeaseView::isPackage).count());
          default -> this.slotValue(var3, var2);
       };
+   }
+
+   /**
+    * offer_&lt;tier&gt;_name, offer_&lt;tier&gt;_radius, offer_&lt;tier&gt;_&lt;days&gt;_price and
+    * offer_&lt;tier&gt;_&lt;days&gt;_combat_price. Prices come from the addon, so the menu can never disagree with it.
+    */
+   private static String offerValue(ApiMessages.StatusResponse status, String key) {
+      String[] parts = key.split("_");
+      if (parts.length < 3) {
+         return "";
+      }
+
+      String tier = parts[1];
+      if (parts.length == 3 && parts[2].equals("name")) {
+         return status.offers().stream().filter(o -> o.tier().equalsIgnoreCase(tier)).map(ApiMessages.PackageOffer::tierName).findFirst().orElse("-");
+      }
+
+      if (parts.length == 3 && parts[2].equals("radius")) {
+         return status.offers().stream().filter(o -> o.tier().equalsIgnoreCase(tier)).map(o -> {
+            int side = o.simulationDistance() * 2 + 1;
+            return side + "\u00d7" + side + " \u533a\u5757";
+         }).findFirst().orElse("-");
+      }
+
+      boolean combat = parts.length == 5 && parts[3].equals("combat") && parts[4].equals("price");
+      boolean plain = parts.length == 4 && parts[3].equals("price");
+      if (!combat && !plain) {
+         return "";
+      }
+
+      int days;
+      try {
+         days = Integer.parseInt(parts[2]);
+      } catch (NumberFormatException notADay) {
+         return "";
+      }
+
+      return status.offers().stream().filter(o -> o.tier().equalsIgnoreCase(tier) && o.days() == days).findFirst()
+         .map(o -> Long.toString(combat ? o.combatPrice() : o.price())).orElse("-");
    }
 
    private String slotValue(ApiMessages.StatusResponse var1, String var2) {
