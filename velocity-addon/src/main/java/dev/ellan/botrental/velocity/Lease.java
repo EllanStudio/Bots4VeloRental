@@ -1,5 +1,6 @@
 package dev.ellan.botrental.velocity;
 
+import dev.ellan.botrental.common.LeaseView;
 import dev.ellan.botrental.common.LocationData;
 import java.util.UUID;
 
@@ -25,6 +26,24 @@ final class Lease {
    long serverSwitchGeneration;
    UUID refundId;
    String endReason;
+   /** HOURLY (per-minute billing) or PACKAGE (prepaid long-term). */
+   String plan = LeaseView.HOURLY;
+   /** Package tier id (load radius); empty for hourly leases. */
+   String tier = "";
+   /** Package only: epoch millis when the prepaid period ends; 0 until the bot first arrives. */
+   long expiresAt;
+   /** Package only: purchased length in days (used to prorate refunds). */
+   int packageDays;
+   /** Package only: bot may fight nearby hostile mobs (set by the paper bridge). */
+   boolean combat;
+   /** Package only: last tick at which the lease was ACTIVE; downtime after this is credited back. */
+   long lastActiveAt;
+   /** Not persisted: when lastActiveAt was last written to the database. */
+   long lastActivePersistedAt;
+
+   boolean isPackage() {
+      return LeaseView.PACKAGE.equals(this.plan);
+   }
 
    Lease(
       UUID var1,

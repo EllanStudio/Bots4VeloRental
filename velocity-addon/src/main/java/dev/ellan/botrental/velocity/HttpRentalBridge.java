@@ -16,13 +16,13 @@ final class HttpRentalBridge implements RentalBridge {
    }
 
    @Override
-   public boolean place(UUID var1, String var2, UUID var3, LocationData var4) throws Exception {
+   public boolean place(UUID var1, String var2, UUID var3, LocationData var4, String tier, boolean combat) throws Exception {
       SignedHttpClient var5 = this.clients.get(var4.server());
       if (var5 == null) {
          return false;
       }
 
-      ApiMessages.BridgeResponse var6 = var5.post("/v1/bridge/place", new ApiMessages.PlaceRequest(var1, var2, var3, var4), ApiMessages.BridgeResponse.class);
+      ApiMessages.BridgeResponse var6 = var5.post("/v1/bridge/place", new ApiMessages.PlaceRequest(var1, var2, var3, var4, tier, combat), ApiMessages.BridgeResponse.class);
       return var6.success();
    }
 

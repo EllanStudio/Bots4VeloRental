@@ -23,8 +23,19 @@ record RentalConfig(
    int maxPerPlayer,
    long billingPeriodSeconds,
    long startupTimeoutSeconds,
-   List<String> pool
+   List<String> pool,
+   PackageConfig packages
 ) {
+   /** Original constructor: no long-term packages. */
+   RentalConfig(
+      String bindAddress, int port, String sharedSecret, Map<String, String> bridges, String currency,
+      long onlineRate, long offlineRate, int maxPerPlayer, long billingPeriodSeconds, long startupTimeoutSeconds,
+      List<String> pool
+   ) {
+      this(bindAddress, port, sharedSecret, bridges, currency, onlineRate, offlineRate, maxPerPlayer,
+         billingPeriodSeconds, startupTimeoutSeconds, pool, PackageConfig.disabled());
+   }
+
    static RentalConfig load(Path var0) throws IOException {
       Path var1 = var0.resolve("config.yml");
       if (Files.notExists(var1)) {
@@ -57,7 +68,8 @@ record RentalConfig(
          integer(var5, "max-per-player"),
          number(var5, "billing-period-seconds"),
          number(var5, "startup-timeout-seconds"),
-         var6
+         var6,
+         PackageConfig.parse(var12)
       );
       var7.validate();
       return var7;
@@ -76,6 +88,20 @@ record RentalConfig(
          if (this.onlineRate > 0L && this.offlineRate > 0L && this.maxPerPlayer > 0 && this.billingPeriodSeconds > 0L && this.startupTimeoutSeconds >= 10L) {
             if (this.pool.isEmpty() || new LinkedHashSet<>(this.pool).size() != this.pool.size()) {
                throw new IllegalArgumentException("rental.pool must contain unique bot ids");
+            }
+
+            if (this.packages.enabled()) {
+               for (String botId : this.packages.pool()) {
+                  if (this.pool.stream().anyMatch(botId::equalsIgnoreCase)) {
+                     throw new IllegalArgumentException("packages.pool overlaps rental.pool: " + botId);
+                  }
+               }
+
+               for (String server : this.packages.allowedServers()) {
+                  if (!this.bridges.containsKey(server)) {
+                     throw new IllegalArgumentException("packages.allowed-servers has no bridge: " + server);
+                  }
+               }
             }
          } else {
             throw new IllegalArgumentException("rental rates and limits must be positive");
