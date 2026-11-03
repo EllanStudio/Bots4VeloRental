@@ -239,8 +239,9 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
          PendingPurchase pending = this.pendingPurchases.get(id);
          if (pending == null || !pending.key().equals(purchaseKey) || pending.expiresAt() < nowMillis) {
             this.pendingPurchases.put(id, new PendingPurchase(purchaseKey, nowMillis + CONFIRM_WINDOW_MILLIS));
-            this.plugin.message(id, "&e\u5c06\u82b1\u8d39 &6" + price + " &e\u91d1\u5e01\u8d2d\u4e70\u3010" + offer.tierName() + "\u00b7" + days + "\u5929"
-               + (combat ? "\u00b7\u6218\u6597" : "") + "\u3011\uff0c\u673a\u5668\u4eba\u4f1a\u653e\u5728\u4f60\u5f53\u524d\u4f4d\u7f6e\u3002&e30 \u79d2\u5185\u518d\u70b9\u4e00\u6b21\u786e\u8ba4\u3002");
+            this.plugin.confirmPrompt(id, "&e\u5c06\u82b1\u8d39 &6" + price + " &e\u91d1\u5e01\u8d2d\u4e70\u3010" + offer.tierName() + "\u00b7" + days + "\u5929"
+               + (combat ? "\u00b7\u6218\u6597" : "") + "\u3011\uff0c\u673a\u5668\u4eba\u4f1a\u653e\u5728\u4f60\u5f53\u524d\u4f4d\u7f6e\u3002",
+               "/botrent pack " + offer.tier() + " " + days + (combat ? " combat" : ""));
             return;
          }
 
@@ -277,7 +278,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
          } else {
             this.plugin.statusCache().updateLease(id, response.lease());
             this.plugin.message(id, "&a" + response.message() + " &7\u5df2\u652f\u4ed8 &e" + price + " &7\u91d1\u5e01\u3002");
-            this.plugin.refresh(id);
+            this.plugin.openManageMenu(id);
          }
       } catch (Exception failure) {
          throw new RuntimeException(failure);

@@ -35,3 +35,6 @@ combat:
     - PIGLIN
     - PIGLIN_BRUTE
     - WARDEN
+
+# Menus opened by the bridge itself (zMenu inventory names).
+package-manage-menu-name: "zmenu:机器人套餐管理"

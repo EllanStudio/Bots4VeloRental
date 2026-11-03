@@ -9,6 +9,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -136,6 +142,36 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
             var2x.sendMessage(color("&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r" + var2));
          }
       });
+   }
+
+   /**
+    * A chat line ending in a clickable [confirm] button that runs {@code command}. The menu closes when a purchase
+    * button is clicked, so this is what the player sees next; one click confirms.
+    */
+   void confirmPrompt(UUID id, String legacyText, String command) {
+      Bukkit.getScheduler().runTask(this, () -> {
+         Player player = Bukkit.getPlayer(id);
+         if (player == null) {
+            return;
+         }
+
+         Component confirm = Component.text(" [\u70b9\u8fd9\u91cc\u786e\u8ba4\u8d2d\u4e70]", NamedTextColor.GREEN, TextDecoration.BOLD)
+            .clickEvent(ClickEvent.runCommand(command))
+            .hoverEvent(HoverEvent.showText(Component.text("30 \u79d2\u5185\u6709\u6548\uff0c\u70b9\u51fb\u540e\u7acb\u5373\u6263\u8d39")));
+         player.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(PREFIX + legacyText).append(confirm));
+      });
+   }
+
+   /** Open the "my packages" page, shortly after a purchase so the new package is already in the status cache. */
+   void openManageMenu(UUID id) {
+      this.refresh(id);
+      Bukkit.getScheduler().runTaskLater(this, () -> {
+         Player player = Bukkit.getPlayer(id);
+         if (player != null) {
+            String name = this.getConfig().getString("package-manage-menu-name", "zmenu:\u673a\u5668\u4eba\u5957\u9910\u7ba1\u7406");
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "zmenu open " + name + " " + player.getName());
+         }
+      }, 10L);
    }
 
    void openMenu(Player var1) {

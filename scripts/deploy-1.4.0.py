@@ -16,7 +16,7 @@ BACKEND_SERVERS = ("redstone", "survival")
 VELOCITY_CORE = "bots4velo-3.0.9.jar"
 ADDON_JAR = "bots4velo-rental-addon-1.4.0.jar"
 PAPER_JAR = "bots4velo-rental-paper-1.4.0.jar"
-MENU_FILES = ("机器人租赁.yml", "机器人长期挂机.yml")
+MENU_FILES = ("机器人租赁.yml", "机器人长期挂机.yml", "机器人套餐管理.yml")
 
 PACKAGES_YAML = '''
 # Long-term prepaid packages (1.4.0). The addon owns this price table; the paper bridges only display it.
@@ -292,6 +292,7 @@ def main():
     ap.add_argument("--backup-dir")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--rollback")
+    ap.add_argument("--only", choices=("all", "menus"), default="all", help="menus: only (re)install the zMenu pages")
     args = ap.parse_args()
     if args.rollback:
         return rollback(args.rollback, args.root)
@@ -301,11 +302,12 @@ def main():
                                              "botrental-1.4.0-" + time.strftime("%Y%m%d-%H%M%S"))
     d = Deployer(os.path.abspath(args.root), os.path.abspath(args.staging), os.path.abspath(backup), args.apply)
     d.preflight()
-    d.velocity_bots()
-    d.addon_config()
-    for s in BACKEND_SERVERS:
-        d.paper_config(s)
-    d.jars()
+    if args.only == "all":
+        d.velocity_bots()
+        d.addon_config()
+        for s in BACKEND_SERVERS:
+            d.paper_config(s)
+        d.jars()
     d.menus()
     d.finish()
 
