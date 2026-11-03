@@ -4,34 +4,37 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 
 public final class SignedHttpClient {
-    private final URI baseUri;
-    private final HmacAuth auth;
-    private final HttpClient client;
+   private final URI baseUri;
+   private final HmacAuth auth;
+   private final HttpClient client;
 
-    public SignedHttpClient(String baseUrl, String secret) {
-        this.baseUri = URI.create(baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl);
-        this.auth = new HmacAuth(secret);
-        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
-    }
+   public SignedHttpClient(String var1, String var2) {
+      this.baseUri = URI.create(var1.endsWith("/") ? var1.substring(0, var1.length() - 1) : var1);
+      this.auth = new HmacAuth(var2);
+      this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3L)).build();
+   }
 
-    public <T> T post(String path, Object request, Class<T> responseType) throws Exception {
-        byte[] body = Json.write(request);
-        HmacAuth.SignedHeaders signed = auth.sign("POST", path, body);
-        HttpRequest httpRequest = HttpRequest.newBuilder(baseUri.resolve(path))
-            .timeout(Duration.ofSeconds(8))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .header(HmacAuth.TIMESTAMP_HEADER, Long.toString(signed.timestamp()))
-            .header(HmacAuth.NONCE_HEADER, signed.nonce())
-            .header(HmacAuth.SIGNATURE_HEADER, signed.signature())
-            .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-            .build();
-        HttpResponse<byte[]> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("HTTP " + response.statusCode() + " from " + path);
-        }
-        return Json.read(response.body(), responseType);
-    }
+   public <T> T post(String var1, Object var2, Class<T> var3) throws Exception {
+      byte[] var4 = Json.write(var2);
+      HmacAuth.SignedHeaders var5 = this.auth.sign("POST", var1, var4);
+      HttpRequest var6 = HttpRequest.newBuilder(this.baseUri.resolve(var1))
+         .timeout(Duration.ofSeconds(8L))
+         .header("Content-Type", "application/json; charset=utf-8")
+         .header("X-BotRental-Timestamp", Long.toString(var5.timestamp()))
+         .header("X-BotRental-Nonce", var5.nonce())
+         .header("X-BotRental-Signature", var5.signature())
+         .POST(BodyPublishers.ofByteArray(var4))
+         .build();
+      HttpResponse var7 = this.client.send(var6, BodyHandlers.ofByteArray());
+      if (var7.statusCode() >= 200 && var7.statusCode() < 300) {
+         return Json.read((byte[])var7.body(), var3);
+      } else {
+         throw new IllegalStateException("HTTP " + var7.statusCode() + " from " + var1);
+      }
+   }
 }

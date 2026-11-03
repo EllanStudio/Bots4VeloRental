@@ -1,144 +1,203 @@
 package dev.ellan.botrental.paper;
 
 import com.sun.net.httpserver.HttpServer;
-import dev.ellan.botrental.common.ApiMessages.BridgeResponse;
-import dev.ellan.botrental.common.ApiMessages.PlaceRequest;
-import dev.ellan.botrental.common.ApiMessages.RefundRequest;
+import dev.ellan.botrental.common.ApiMessages;
 import dev.ellan.botrental.common.HmacAuth;
 import dev.ellan.botrental.common.LocationData;
 import dev.ellan.botrental.common.SignedJsonHandler;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.stream.Collectors;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 
 final class BridgeHttpServer implements AutoCloseable {
-    private final JavaPlugin plugin;
-    private final EconomyService economy;
-    private final RefundLedger refunds;
-    private final Set<String> botUsernames;
-    private final HttpServer server;
-    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+   private final JavaPlugin plugin;
+   private final EconomyService economy;
+   private final RefundLedger refunds;
+   private final Set<String> botUsernames;
+   private final String serverId;
+   private final HttpServer server;
+   private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    BridgeHttpServer(JavaPlugin plugin, PaperRentalConfig config,
-                     EconomyService economy, RefundLedger refunds) throws IOException {
-        this.plugin = plugin;
-        this.economy = economy;
-        this.refunds = refunds;
-        this.botUsernames = config.botUsernames().stream()
-            .map(name -> name.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toUnmodifiableSet());
-        this.server = HttpServer.create(new InetSocketAddress(config.bindAddress(), config.bridgePort()), 16);
-        HmacAuth auth = new HmacAuth(config.sharedSecret());
-        server.createContext("/v1/bridge/place", new SignedJsonHandler<>(auth, PlaceRequest.class) {
-            @Override
-            protected Object process(PlaceRequest request) throws Exception {
-                return place(request);
+   BridgeHttpServer(final JavaPlugin var1, PaperRentalConfig var2, EconomyService var3, RefundLedger var4) throws IOException {
+      this.plugin = var1;
+      this.economy = var3;
+      this.refunds = var4;
+      this.serverId = var2.serverId();
+      this.botUsernames = var2.botUsernames().stream().map(var0 -> var0.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+      this.server = HttpServer.create(new InetSocketAddress(var2.bindAddress(), var2.bridgePort()), 16);
+      HmacAuth var5 = new HmacAuth(var2.sharedSecret());
+      this.server.createContext("/v1/bridge/place", new SignedJsonHandler<ApiMessages.PlaceRequest>(var5, ApiMessages.PlaceRequest.class) {
+         {
+            Objects.requireNonNull(BridgeHttpServer.this);
+         }
+
+         protected Object process(ApiMessages.PlaceRequest var1x) throws Exception {
+            return BridgeHttpServer.this.place(var1x);
+         }
+
+         @Override
+         protected void onFailure(Exception var1x) {
+            var1.getLogger().log(Level.WARNING, "Bot placement request failed", var1x);
+         }
+      });
+      this.server.createContext("/v1/bridge/refund", new SignedJsonHandler<ApiMessages.RefundRequest>(var5, ApiMessages.RefundRequest.class) {
+         {
+            Objects.requireNonNull(BridgeHttpServer.this);
+         }
+
+         protected Object process(ApiMessages.RefundRequest var1x) throws Exception {
+            return BridgeHttpServer.this.refund(var1x);
+         }
+
+         @Override
+         protected void onFailure(Exception var1x) {
+            var1.getLogger().log(Level.WARNING, "Bot refund request failed", var1x);
+         }
+      });
+      this.server.setExecutor(this.executor);
+   }
+
+   void start() {
+      this.server.start();
+   }
+
+   private ApiMessages.BridgeResponse place(ApiMessages.PlaceRequest var1) throws Exception {
+      if (var1 == null
+         || var1.leaseId() == null
+         || var1.ownerUuid() == null
+         || var1.location() == null
+         || var1.botUsername() == null
+         || !this.botUsernames.contains(var1.botUsername().toLowerCase(Locale.ROOT))) {
+         return ApiMessages.BridgeResponse.fail("INVALID_BOT", "Invalid rental bot");
+      }
+
+      if (!this.serverId.equals(var1.location().server())) {
+         return ApiMessages.BridgeResponse.fail("WRONG_SERVER", "Placement is for " + var1.location().server() + ", this bridge is " + this.serverId);
+      }
+
+      CompletableFuture var2 = new CompletableFuture();
+      Bukkit.getScheduler().runTask(this.plugin, () -> {
+         try {
+            var2.complete(this.placeNow(var1.botUsername(), var1.location()));
+         } catch (Throwable var4) {
+            var2.completeExceptionally(var4);
+         }
+      });
+      return ((BridgeHttpServer.PlaceOutcome)var2.get(5L, TimeUnit.SECONDS)).response();
+   }
+
+   private BridgeHttpServer.PlaceOutcome placeNow(String var1, LocationData var2) {
+      Player var3 = Bukkit.getPlayerExact(var1);
+      World var4 = Bukkit.getWorld(var2.world());
+      if (var3 == null || !var3.isOnline()) {
+         return BridgeHttpServer.PlaceOutcome.fail("BOT_NOT_READY", "Bot " + var1 + " is not online on " + this.serverId);
+      }
+
+      if (var4 == null) {
+         return BridgeHttpServer.PlaceOutcome.fail("WORLD_NOT_FOUND", "World " + var2.world() + " is not loaded on " + this.serverId);
+      }
+
+      if (!(var2.y() < var4.getMinHeight()) && !(var2.y() > var4.getMaxHeight() + 16)) {
+         Location var5 = new Location(var4, var2.x(), var2.y(), var2.z(), var2.yaw(), var2.pitch());
+         if (!var4.getWorldBorder().isInside(var5)) {
+            return BridgeHttpServer.PlaceOutcome.fail("OUTSIDE_WORLD_BORDER", "Target is outside the world border for " + var2.world());
+         } else {
+            var3.setInvulnerable(true);
+            var3.setCollidable(false);
+            var3.setCanPickupItems(false);
+            var3.setSleepingIgnored(true);
+            String var6 = String.format(
+               Locale.ROOT,
+               "minecraft:execute as %s in %s run minecraft:tp @s %.4f %.4f %.4f %.4f %.4f",
+               var1,
+               var4.getKey(),
+               var2.x(),
+               var2.y(),
+               var2.z(),
+               var2.yaw(),
+               var2.pitch()
+            );
+            boolean var7 = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), var6);
+            if (!var7) {
+               this.plugin
+                  .getLogger()
+                  .warning(
+                     "Could not teleport rental bot "
+                        + var1
+                        + " to "
+                        + var2.world()
+                        + " "
+                        + var2.x()
+                        + ", "
+                        + var2.y()
+                        + ", "
+                        + var2.z()
+                        + " (command rejected)"
+                  );
+               return BridgeHttpServer.PlaceOutcome.fail("TELEPORT_REJECTED", "Teleport command was rejected");
+            } else {
+               return BridgeHttpServer.PlaceOutcome.ok();
             }
+         }
+      } else {
+         return BridgeHttpServer.PlaceOutcome.fail("OUT_OF_BOUNDS", "Target Y is outside the world height for " + var2.world());
+      }
+   }
 
-            @Override
-            protected void onFailure(Exception failure) {
-                plugin.getLogger().log(java.util.logging.Level.WARNING, "Bot placement request failed", failure);
-            }
-        });
-        server.createContext("/v1/bridge/refund", new SignedJsonHandler<>(auth, RefundRequest.class) {
-            @Override
-            protected Object process(RefundRequest request) throws Exception {
-                return refund(request);
-            }
+   private ApiMessages.BridgeResponse refund(ApiMessages.RefundRequest var1) throws Exception {
+      if (var1 == null || var1.refundId() == null || var1.leaseId() == null || var1.ownerUuid() == null || var1.coins() < 0L || var1.coins() > 1000000000L) {
+         return ApiMessages.BridgeResponse.fail("BAD_REFUND", "Invalid refund");
+      }
 
-            @Override
-            protected void onFailure(Exception failure) {
-                plugin.getLogger().log(java.util.logging.Level.WARNING, "Bot refund request failed", failure);
-            }
-        });
-        server.setExecutor(executor);
-    }
+      if (this.refunds.contains(var1.refundId())) {
+         return ApiMessages.BridgeResponse.ok("Refund already processed");
+      }
 
-    void start() {
-        server.start();
-    }
+      if (var1.coins() == 0L) {
+         this.refunds.record(var1.refundId(), 0L);
+         return ApiMessages.BridgeResponse.ok("Nothing to refund");
+      }
 
-    private BridgeResponse place(PlaceRequest request) throws Exception {
-        if (request == null || request.leaseId() == null || request.ownerUuid() == null
-            || request.location() == null || request.botUsername() == null
-            || !botUsernames.contains(request.botUsername().toLowerCase(Locale.ROOT))) {
-            return BridgeResponse.fail("INVALID_BOT", "Invalid rental bot");
-        }
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            try {
-                result.complete(placeNow(request.botUsername(), request.location()));
-            }
-            catch (Throwable failure) {
-                result.completeExceptionally(failure);
-            }
-        });
-        return result.get(5, TimeUnit.SECONDS)
-            ? BridgeResponse.ok("Bot placed")
-            : BridgeResponse.fail("BOT_NOT_READY", "Bot is not online on redstone");
-    }
+      boolean var2 = this.economy.deposit(var1.ownerUuid(), var1.coins()).get(8L, TimeUnit.SECONDS);
+      if (!var2) {
+         return ApiMessages.BridgeResponse.fail("ECONOMY_REJECTED", "Economy rejected refund");
+      }
 
-    private boolean placeNow(String username, LocationData requested) {
-        Player bot = Bukkit.getPlayerExact(username);
-        World world = Bukkit.getWorld(requested.world());
-        if (bot == null || !bot.isOnline() || world == null) {
-            return false;
-        }
-        if (requested.y() < world.getMinHeight() || requested.y() > world.getMaxHeight() + 16) {
-            return false;
-        }
-        Location destination = new Location(world, requested.x(), requested.y(), requested.z(),
-            requested.yaw(), requested.pitch());
-        if (!world.getWorldBorder().isInside(destination)) {
-            return false;
-        }
-        boolean teleported = bot.teleport(destination, PlayerTeleportEvent.TeleportCause.PLUGIN);
-        if (teleported) {
-            bot.setInvulnerable(true);
-            bot.setCollidable(false);
-            bot.setCanPickupItems(false);
-            bot.setSleepingIgnored(true);
-        }
-        return teleported;
-    }
+      this.refunds.record(var1.refundId(), var1.coins());
+      this.plugin.getLogger().info("Refunded " + var1.coins() + " ellan_coin to " + var1.ownerUuid() + " for lease " + var1.leaseId());
+      return ApiMessages.BridgeResponse.ok("Refund processed");
+   }
 
-    private BridgeResponse refund(RefundRequest request) throws Exception {
-        if (request == null || request.refundId() == null || request.leaseId() == null
-            || request.ownerUuid() == null || request.coins() < 0 || request.coins() > 1_000_000_000L) {
-            return BridgeResponse.fail("BAD_REFUND", "Invalid refund");
-        }
-        if (refunds.contains(request.refundId())) {
-            return BridgeResponse.ok("Refund already processed");
-        }
-        if (request.coins() == 0) {
-            refunds.record(request.refundId(), 0);
-            return BridgeResponse.ok("Nothing to refund");
-        }
-        boolean deposited = economy.deposit(request.ownerUuid(), request.coins()).get(8, TimeUnit.SECONDS);
-        if (!deposited) {
-            return BridgeResponse.fail("ECONOMY_REJECTED", "Economy rejected refund");
-        }
-        refunds.record(request.refundId(), request.coins());
-        plugin.getLogger().info("Refunded " + request.coins() + " ellan_coin to "
-            + request.ownerUuid() + " for lease " + request.leaseId());
-        return BridgeResponse.ok("Refund processed");
-    }
+   @Override
+   public void close() {
+      this.server.stop(1);
+      this.executor.close();
+   }
 
-    @Override
-    public void close() {
-        server.stop(1);
-        executor.close();
-    }
+   private record PlaceOutcome(boolean success, String code, String message) {
+      private static BridgeHttpServer.PlaceOutcome ok() {
+         return new BridgeHttpServer.PlaceOutcome(true, "OK", "Bot placed");
+      }
+
+      private static BridgeHttpServer.PlaceOutcome fail(String var0, String var1) {
+         return new BridgeHttpServer.PlaceOutcome(false, var0, var1);
+      }
+
+      private ApiMessages.BridgeResponse response() {
+         return this.success ? ApiMessages.BridgeResponse.ok(this.message) : ApiMessages.BridgeResponse.fail(this.code, this.message);
+      }
+   }
 }

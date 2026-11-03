@@ -1,10 +1,15 @@
 package dev.ellan.botrental.paper;
 
-import dev.ellan.botrental.common.ApiMessages.StatusResponse;
 import dev.ellan.botrental.common.LocationData;
+import java.nio.file.Files;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -12,154 +17,149 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.nio.file.Files;
-import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
-    static final String PREFIX = "&7[&e!&7]&3&l挂机机器人 &r";
+   static final String PREFIX = "&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r";
+   private PaperRentalConfig rentalConfig;
+   private AddonClient addon;
+   private EconomyService economy;
+   private StatusCache statusCache;
+   private BridgeHttpServer bridgeServer;
+   private ExecutorService executor;
+   private RentalPlaceholders placeholders;
 
-    private PaperRentalConfig rentalConfig;
-    private AddonClient addon;
-    private EconomyService economy;
-    private StatusCache statusCache;
-    private BridgeHttpServer bridgeServer;
-    private ExecutorService executor;
-    private RentalPlaceholders placeholders;
+   public void onEnable() {
+      try {
+         this.saveDefaultConfig();
+         this.rentalConfig = PaperRentalConfig.load(this.getConfig());
+         Files.createDirectories(this.getDataFolder().toPath());
+         this.addon = new AddonClient(this.rentalConfig);
+         this.economy = new EconomyService(this.rentalConfig.currency());
+         this.statusCache = new StatusCache();
+         this.bridgeServer = new BridgeHttpServer(
+            this, this.rentalConfig, this.economy, new RefundLedger(this.getDataFolder().toPath().resolve("processed-refunds.properties"))
+         );
+         this.bridgeServer.start();
+         this.executor = Executors.newVirtualThreadPerTaskExecutor();
+         BotRentalCommand var1 = new BotRentalCommand(this);
+         PluginCommand var2 = this.getCommand("botrent");
+         if (var2 == null) {
+            throw new IllegalStateException("botrent command is missing from plugin.yml");
+         }
 
-    @Override
-    public void onEnable() {
-        try {
-            saveDefaultConfig();
-            rentalConfig = PaperRentalConfig.load(getConfig());
-            Files.createDirectories(getDataFolder().toPath());
-            addon = new AddonClient(rentalConfig);
-            economy = new EconomyService(rentalConfig.currency());
-            statusCache = new StatusCache();
-            bridgeServer = new BridgeHttpServer(this, rentalConfig, economy,
-                new RefundLedger(getDataFolder().toPath().resolve("processed-refunds.properties")));
-            bridgeServer.start();
-            executor = Executors.newVirtualThreadPerTaskExecutor();
+         var2.setExecutor(var1);
+         var2.setTabCompleter(var1);
+         Bukkit.getPluginManager().registerEvents(this, this);
+         if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            this.placeholders = new RentalPlaceholders(this);
+            this.placeholders.register();
+         }
 
-            BotRentalCommand command = new BotRentalCommand(this);
-            var registered = getCommand("botrent");
-            if (registered == null) {
-                throw new IllegalStateException("botrent command is missing from plugin.yml");
-            }
-            registered.setExecutor(command);
-            registered.setTabCompleter(command);
-            Bukkit.getPluginManager().registerEvents(this, this);
-            if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-                placeholders = new RentalPlaceholders(this);
-                placeholders.register();
-            }
-            Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::refreshOnlinePlayers, 40L, 100L);
-            getLogger().info("Bots4Velo rental bridge enabled for redstone only.");
-        }
-        catch (Exception failure) {
-            getLogger().log(java.util.logging.Level.SEVERE, "Could not enable Bots4Velo rental bridge", failure);
-            Bukkit.getPluginManager().disablePlugin(this);
-        }
-    }
+         Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::refreshOnlinePlayers, 40L, 100L);
+         this.getLogger().info("Bots4Velo rental bridge enabled for server " + this.rentalConfig.serverId() + ".");
+      } catch (Exception var3) {
+         this.getLogger().log(Level.SEVERE, "Could not enable Bots4Velo rental bridge", var3);
+         Bukkit.getPluginManager().disablePlugin(this);
+      }
+   }
 
-    @Override
-    public void onDisable() {
-        if (placeholders != null) {
-            placeholders.unregister();
-            placeholders = null;
-        }
-        if (bridgeServer != null) {
-            bridgeServer.close();
-            bridgeServer = null;
-        }
-        if (executor != null) {
-            executor.shutdownNow();
-            executor = null;
-        }
-    }
+   public void onDisable() {
+      if (this.placeholders != null) {
+         this.placeholders.unregister();
+         this.placeholders = null;
+      }
 
-    @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        refresh(event.getPlayer().getUniqueId());
-    }
+      if (this.bridgeServer != null) {
+         this.bridgeServer.close();
+         this.bridgeServer = null;
+      }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        statusCache.remove(event.getPlayer().getUniqueId());
-    }
+      if (this.executor != null) {
+         this.executor.shutdownNow();
+         this.executor = null;
+      }
+   }
 
-    void runAsync(Runnable action) {
-        ExecutorService current = executor;
-        if (current != null) {
-            current.execute(action);
-        }
-    }
+   @EventHandler
+   public void onJoin(PlayerJoinEvent var1) {
+      this.refresh(var1.getPlayer().getUniqueId());
+   }
 
-    void message(UUID playerId, String message) {
-        Bukkit.getScheduler().runTask(this, () -> {
-            Player player = Bukkit.getPlayer(playerId);
-            if (player != null) {
-                player.sendMessage(color(PREFIX + message));
-            }
-        });
-    }
+   @EventHandler
+   public void onQuit(PlayerQuitEvent var1) {
+      this.statusCache.remove(var1.getPlayer().getUniqueId());
+   }
 
-    void openMenu(Player player) {
-        boolean opened = Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
-            "zmenu open " + rentalConfig.menuName() + " " + player.getName());
-        if (!opened) {
-            player.sendMessage(color(PREFIX + "&c菜单暂时无法打开，请使用 &f/botrent status &c查看状态。"));
-        }
-        refresh(player.getUniqueId());
-    }
+   void runAsync(Runnable var1) {
+      ExecutorService var2 = this.executor;
+      if (var2 != null) {
+         var2.execute(var1);
+      }
+   }
 
-    void refresh(UUID playerId) {
-        runAsync(() -> {
+   void message(UUID var1, String var2) {
+      Bukkit.getScheduler().runTask(this, () -> {
+         Player var2x = Bukkit.getPlayer(var1);
+         if (var2x != null) {
+            var2x.sendMessage(color("&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r" + var2));
+         }
+      });
+   }
+
+   void openMenu(Player var1) {
+      boolean var2 = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "zmenu open " + this.rentalConfig.menuName() + " " + var1.getName());
+      if (!var2) {
+         var1.sendMessage(
+            color(
+               "&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r&c\u83dc\u5355\u6682\u65f6\u65e0\u6cd5\u6253\u5f00\uff0c\u8bf7\u4f7f\u7528 &f/botrent status &c\u67e5\u770b\u72b6\u6001\u3002"
+            )
+         );
+      }
+
+      this.refresh(var1.getUniqueId());
+   }
+
+   void refresh(UUID var1) {
+      this.runAsync(() -> {
+         try {
+            this.statusCache.put(var1, this.addon.status(var1));
+         } catch (Exception var3) {
+         }
+      });
+   }
+
+   private void refreshOnlinePlayers() {
+      for (Player var2 : Bukkit.getOnlinePlayers()) {
+         UUID var3 = var2.getUniqueId();
+         if (this.statusCache.needsRefresh(var3, 4000L)) {
             try {
-                statusCache.put(playerId, addon.status(playerId));
+               this.statusCache.put(var3, this.addon.status(var3));
+            } catch (Exception var5) {
             }
-            catch (Exception ignored) {
-            }
-        });
-    }
+         }
+      }
+   }
 
-    private void refreshOnlinePlayers() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            UUID playerId = player.getUniqueId();
-            if (!statusCache.needsRefresh(playerId, 4_000)) {
-                continue;
-            }
-            try {
-                statusCache.put(playerId, addon.status(playerId));
-            }
-            catch (Exception ignored) {
-            }
-        }
-    }
+   LocationData location(Location var1) {
+      return new LocationData(this.rentalConfig.serverId(), var1.getWorld().getName(), var1.getX(), var1.getY(), var1.getZ(), var1.getYaw(), var1.getPitch());
+   }
 
-    static LocationData location(Location location) {
-        return new LocationData(location.getWorld().getName(), location.getX(), location.getY(), location.getZ(),
-            location.getYaw(), location.getPitch());
-    }
+   static String color(String var0) {
+      return ChatColor.translateAlternateColorCodes('&', var0);
+   }
 
-    static String color(String value) {
-        return ChatColor.translateAlternateColorCodes('&', value);
-    }
+   PaperRentalConfig rentalConfig() {
+      return this.rentalConfig;
+   }
 
-    PaperRentalConfig rentalConfig() {
-        return rentalConfig;
-    }
+   AddonClient addon() {
+      return this.addon;
+   }
 
-    AddonClient addon() {
-        return addon;
-    }
+   EconomyService economy() {
+      return this.economy;
+   }
 
-    EconomyService economy() {
-        return economy;
-    }
-
-    StatusCache statusCache() {
-        return statusCache;
-    }
+   StatusCache statusCache() {
+      return this.statusCache;
+   }
 }

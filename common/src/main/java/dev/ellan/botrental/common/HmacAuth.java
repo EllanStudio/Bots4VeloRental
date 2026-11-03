@@ -1,7 +1,5 @@
 package dev.ellan.botrental.common;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -10,74 +8,75 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 public final class HmacAuth {
-    public static final String TIMESTAMP_HEADER = "X-BotRental-Timestamp";
-    public static final String NONCE_HEADER = "X-BotRental-Nonce";
-    public static final String SIGNATURE_HEADER = "X-BotRental-Signature";
-    private static final Duration MAX_SKEW = Duration.ofSeconds(30);
+   public static final String TIMESTAMP_HEADER = "X-BotRental-Timestamp";
+   public static final String NONCE_HEADER = "X-BotRental-Nonce";
+   public static final String SIGNATURE_HEADER = "X-BotRental-Signature";
+   private static final Duration MAX_SKEW = Duration.ofSeconds(30L);
+   private final byte[] secret;
+   private final Clock clock;
+   private final Map<String, Long> seenNonces = new ConcurrentHashMap<>();
 
-    private final byte[] secret;
-    private final Clock clock;
-    private final Map<String, Long> seenNonces = new ConcurrentHashMap<>();
+   public HmacAuth(String var1) {
+      this(var1, Clock.systemUTC());
+   }
 
-    public HmacAuth(String secret) {
-        this(secret, Clock.systemUTC());
-    }
+   HmacAuth(String var1, Clock var2) {
+      if (var1 != null && var1.length() >= 32) {
+         this.secret = var1.getBytes(StandardCharsets.UTF_8);
+         this.clock = var2;
+      } else {
+         throw new IllegalArgumentException("shared secret must contain at least 32 characters");
+      }
+   }
 
-    HmacAuth(String secret, Clock clock) {
-        if (secret == null || secret.length() < 32) {
-            throw new IllegalArgumentException("shared secret must contain at least 32 characters");
-        }
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
-        this.clock = clock;
-    }
+   public HmacAuth.SignedHeaders sign(String var1, String var2, byte[] var3) {
+      long var4 = this.clock.millis();
+      String var6 = UUID.randomUUID().toString();
+      return new HmacAuth.SignedHeaders(var4, var6, this.signature(var1, var2, var4, var6, var3));
+   }
 
-    public SignedHeaders sign(String method, String path, byte[] body) {
-        long timestamp = clock.millis();
-        String nonce = UUID.randomUUID().toString();
-        return new SignedHeaders(timestamp, nonce, signature(method, path, timestamp, nonce, body));
-    }
-
-    public boolean verify(String method, String path, byte[] body, String timestampValue,
-                          String nonce, String suppliedSignature) {
-        if (timestampValue == null || nonce == null || suppliedSignature == null || nonce.length() > 80) {
+   public boolean verify(String var1, String var2, byte[] var3, String var4, String var5, String var6) {
+      if (var4 != null && var5 != null && var6 != null && var5.length() <= 80) {
+         long var7;
+         try {
+            var7 = Long.parseLong(var4);
+         } catch (NumberFormatException var12) {
             return false;
-        }
-        long timestamp;
-        try {
-            timestamp = Long.parseLong(timestampValue);
-        }
-        catch (NumberFormatException ignored) {
-            return false;
-        }
-        long now = clock.millis();
-        if (Math.abs(now - timestamp) > MAX_SKEW.toMillis()) {
-            return false;
-        }
-        seenNonces.entrySet().removeIf(entry -> now - entry.getValue() > MAX_SKEW.toMillis() * 2);
-        if (seenNonces.putIfAbsent(nonce, now) != null) {
-            return false;
-        }
-        String expected = signature(method, path, timestamp, nonce, body);
-        return MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),
-            suppliedSignature.getBytes(StandardCharsets.US_ASCII));
-    }
+         }
 
-    private String signature(String method, String path, long timestamp, String nonce, byte[] body) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(body == null ? new byte[0] : body);
-            String canonical = method.toUpperCase() + "\n" + path + "\n" + timestamp + "\n" + nonce
-                + "\n" + Base64.getEncoder().encodeToString(digest);
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
-            return Base64.getEncoder().encodeToString(mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
-        }
-        catch (Exception failure) {
-            throw new IllegalStateException("could not sign request", failure);
-        }
-    }
+         long var9 = this.clock.millis();
+         if (Math.abs(var9 - var7) > MAX_SKEW.toMillis()) {
+            return false;
+         }
 
-    public record SignedHeaders(long timestamp, String nonce, String signature) {
-    }
+         this.seenNonces.entrySet().removeIf(var2x -> var9 - var2x.getValue() > MAX_SKEW.toMillis() * 2L);
+         if (this.seenNonces.putIfAbsent(var5, var9) != null) {
+            return false;
+         }
+
+         String var11 = this.signature(var1, var2, var7, var5, var3);
+         return MessageDigest.isEqual(var11.getBytes(StandardCharsets.US_ASCII), var6.getBytes(StandardCharsets.US_ASCII));
+      } else {
+         return false;
+      }
+   }
+
+   private String signature(String var1, String var2, long var3, String var5, byte[] var6) {
+      try {
+         byte[] var7 = MessageDigest.getInstance("SHA-256").digest(var6 == null ? new byte[0] : var6);
+         String var8 = var1.toUpperCase() + "\n" + var2 + "\n" + var3 + "\n" + var5 + "\n" + Base64.getEncoder().encodeToString(var7);
+         Mac var9 = Mac.getInstance("HmacSHA256");
+         var9.init(new SecretKeySpec(this.secret, "HmacSHA256"));
+         return Base64.getEncoder().encodeToString(var9.doFinal(var8.getBytes(StandardCharsets.UTF_8)));
+      } catch (Exception var10) {
+         throw new IllegalStateException("could not sign request", var10);
+      }
+   }
+
+   public record SignedHeaders(long timestamp, String nonce, String signature) {
+   }
 }

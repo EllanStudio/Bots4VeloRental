@@ -265,8 +265,8 @@ class LeaseManagerTest {
     }
 
     private TestRig rig() throws Exception {
-        RentalConfig config = new RentalConfig("127.0.0.1", 18765, "http://127.0.0.1:18766",
-            "01234567890123456789012345678901", "redstone", "ellan_coin", 5, 20, 3,
+        RentalConfig config = new RentalConfig("127.0.0.1", 18765,
+            "01234567890123456789012345678901", Map.of("redstone", "http://127.0.0.1:18766"), "ellan_coin", 5, 20, 3,
             60, 90, IntStream.rangeClosed(1, 10).mapToObj(index -> "BOT_" + index).toList());
         FakeBots bots = new FakeBots(config.pool());
         FakeBridge bridge = new FakeBridge();
@@ -278,7 +278,7 @@ class LeaseManagerTest {
 
     private static CreateRequest request(UUID owner, long reserve) {
         return new CreateRequest(UUID.randomUUID(), owner, "Player", reserve,
-            new LocationData("world", 1, 64, 2, 0, 0));
+            new LocationData("redstone", "world", 1, 64, 2, 0, 0));
     }
 
     private record TestRig(LeaseManager manager, FakeBots bots, FakeBridge bridge, MutableClock clock)
@@ -330,7 +330,7 @@ class LeaseManagerTest {
         }
 
         @Override
-        public boolean refund(UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) {
+        public boolean refund(String server, UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) {
             refunds.add(coins);
             return true;
         }

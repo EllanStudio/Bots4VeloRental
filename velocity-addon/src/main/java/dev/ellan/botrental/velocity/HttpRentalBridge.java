@@ -1,31 +1,37 @@
 package dev.ellan.botrental.velocity;
 
-import dev.ellan.botrental.common.ApiMessages.BridgeResponse;
-import dev.ellan.botrental.common.ApiMessages.PlaceRequest;
-import dev.ellan.botrental.common.ApiMessages.RefundRequest;
+import dev.ellan.botrental.common.ApiMessages;
 import dev.ellan.botrental.common.LocationData;
 import dev.ellan.botrental.common.SignedHttpClient;
-
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 final class HttpRentalBridge implements RentalBridge {
-    private final SignedHttpClient client;
+   private final Map<String, SignedHttpClient> clients = new LinkedHashMap<>();
 
-    HttpRentalBridge(RentalConfig config) {
-        client = new SignedHttpClient(config.bridgeBaseUrl(), config.sharedSecret());
-    }
+   HttpRentalBridge(RentalConfig var1) {
+      var1.bridges().forEach((var2, var3) -> this.clients.put(var2, new SignedHttpClient(var3, var1.sharedSecret())));
+   }
 
-    @Override
-    public boolean place(UUID leaseId, String botUsername, UUID ownerUuid, LocationData location) throws Exception {
-        BridgeResponse response = client.post("/v1/bridge/place",
-            new PlaceRequest(leaseId, botUsername, ownerUuid, location), BridgeResponse.class);
-        return response.success();
-    }
+   @Override
+   public boolean place(UUID var1, String var2, UUID var3, LocationData var4) throws Exception {
+      SignedHttpClient var5 = this.clients.get(var4.server());
+      if (var5 == null) {
+         return false;
+      }
 
-    @Override
-    public boolean refund(UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) throws Exception {
-        BridgeResponse response = client.post("/v1/bridge/refund",
-            new RefundRequest(refundId, leaseId, ownerUuid, coins, reason), BridgeResponse.class);
-        return response.success();
-    }
+      ApiMessages.BridgeResponse var6 = var5.post("/v1/bridge/place", new ApiMessages.PlaceRequest(var1, var2, var3, var4), ApiMessages.BridgeResponse.class);
+      return var6.success();
+   }
+
+   @Override
+   public boolean refund(String var1, UUID var2, UUID var3, UUID var4, long var5, String var7) throws Exception {
+      SignedHttpClient var8 = this.clients.getOrDefault(var1 == null ? "" : var1.toLowerCase(Locale.ROOT), this.clients.values().iterator().next());
+      ApiMessages.BridgeResponse var9 = var8.post(
+         "/v1/bridge/refund", new ApiMessages.RefundRequest(var2, var3, var4, var5, var7), ApiMessages.BridgeResponse.class
+      );
+      return var9.success();
+   }
 }

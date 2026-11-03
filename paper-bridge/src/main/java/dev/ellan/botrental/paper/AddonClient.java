@@ -1,61 +1,53 @@
 package dev.ellan.botrental.paper;
 
-import dev.ellan.botrental.common.ApiMessages.ActionResponse;
-import dev.ellan.botrental.common.ApiMessages.CreateRequest;
-import dev.ellan.botrental.common.ApiMessages.OwnerSlotRequest;
-import dev.ellan.botrental.common.ApiMessages.RelocateRequest;
-import dev.ellan.botrental.common.ApiMessages.StatusRequest;
-import dev.ellan.botrental.common.ApiMessages.StatusResponse;
-import dev.ellan.botrental.common.ApiMessages.TopUpRequest;
+import dev.ellan.botrental.common.ApiMessages;
 import dev.ellan.botrental.common.LocationData;
 import dev.ellan.botrental.common.SignedHttpClient;
-
 import java.util.UUID;
 
 final class AddonClient {
-    private final SignedHttpClient client;
+   private final SignedHttpClient client;
 
-    AddonClient(PaperRentalConfig config) {
-        client = new SignedHttpClient(config.addonBaseUrl(), config.sharedSecret());
-    }
+   AddonClient(PaperRentalConfig var1) {
+      this.client = new SignedHttpClient(var1.addonBaseUrl(), var1.sharedSecret());
+   }
 
-    StatusResponse status(UUID owner) throws Exception {
-        return post("/v1/leases/status", new StatusRequest(owner), StatusResponse.class);
-    }
+   ApiMessages.StatusResponse status(UUID var1) throws Exception {
+      return this.post("/v1/leases/status", new ApiMessages.StatusRequest(var1), ApiMessages.StatusResponse.class);
+   }
 
-    ActionResponse create(UUID owner, String name, long reserve, LocationData location) throws Exception {
-        CreateRequest request = new CreateRequest(UUID.randomUUID(), owner, name, reserve, location);
-        return post("/v1/leases/create", request, ActionResponse.class);
-    }
+   ApiMessages.ActionResponse create(UUID var1, String var2, long var3, LocationData var5) throws Exception {
+      ApiMessages.CreateRequest var6 = new ApiMessages.CreateRequest(UUID.randomUUID(), var1, var2, var3, var5);
+      return this.post("/v1/leases/create", var6, ApiMessages.ActionResponse.class);
+   }
 
-    ActionResponse cancel(UUID owner, int slot) throws Exception {
-        OwnerSlotRequest request = new OwnerSlotRequest(UUID.randomUUID(), owner, slot);
-        return post("/v1/leases/cancel", request, ActionResponse.class);
-    }
+   ApiMessages.ActionResponse cancel(UUID var1, int var2) throws Exception {
+      ApiMessages.OwnerSlotRequest var3 = new ApiMessages.OwnerSlotRequest(UUID.randomUUID(), var1, var2);
+      return this.post("/v1/leases/cancel", var3, ApiMessages.ActionResponse.class);
+   }
 
-    ActionResponse topUp(UUID owner, int slot, long coins) throws Exception {
-        TopUpRequest request = new TopUpRequest(UUID.randomUUID(), owner, slot, coins);
-        return post("/v1/leases/topup", request, ActionResponse.class);
-    }
+   ApiMessages.ActionResponse topUp(UUID var1, int var2, long var3) throws Exception {
+      ApiMessages.TopUpRequest var5 = new ApiMessages.TopUpRequest(UUID.randomUUID(), var1, var2, var3);
+      return this.post("/v1/leases/topup", var5, ApiMessages.ActionResponse.class);
+   }
 
-    ActionResponse relocate(UUID owner, int slot, LocationData location) throws Exception {
-        RelocateRequest request = new RelocateRequest(UUID.randomUUID(), owner, slot, location);
-        return post("/v1/leases/relocate", request, ActionResponse.class);
-    }
+   ApiMessages.ActionResponse relocate(UUID var1, int var2, LocationData var3) throws Exception {
+      ApiMessages.RelocateRequest var4 = new ApiMessages.RelocateRequest(UUID.randomUUID(), var1, var2, var3);
+      return this.post("/v1/leases/relocate", var4, ApiMessages.ActionResponse.class);
+   }
 
-    private <T> T post(String path, Object request, Class<T> responseType) throws Exception {
-        try {
-            return client.post(path, request, responseType);
-        }
-        catch (Exception firstFailure) {
-            Thread.sleep(150);
-            try {
-                return client.post(path, request, responseType);
-            }
-            catch (Exception secondFailure) {
-                secondFailure.addSuppressed(firstFailure);
-                throw secondFailure;
-            }
-        }
-    }
+   private <T> T post(String var1, Object var2, Class<T> var3) throws Exception {
+      try {
+         return this.client.post(var1, var2, var3);
+      } catch (Exception var7) {
+         Thread.sleep(150L);
+
+         try {
+            return this.client.post(var1, var2, var3);
+         } catch (Exception var6) {
+            var6.addSuppressed(var7);
+            throw var6;
+         }
+      }
+   }
 }

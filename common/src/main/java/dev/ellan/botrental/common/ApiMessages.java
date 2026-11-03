@@ -4,71 +4,64 @@ import java.util.List;
 import java.util.UUID;
 
 public final class ApiMessages {
-    private ApiMessages() {
-    }
+   private ApiMessages() {
+   }
 
-    public record CreateRequest(
-        UUID requestId,
-        UUID ownerUuid,
-        String ownerName,
-        long reserveCoins,
-        LocationData location
-    ) {
-    }
+   public record ActionResponse(boolean success, String code, String message, LeaseView lease, long refundableCoins) {
+      public static ApiMessages.ActionResponse ok(String var0, LeaseView var1) {
+         return new ApiMessages.ActionResponse(true, "OK", var0, var1, 0L);
+      }
 
-    public record OwnerSlotRequest(UUID requestId, UUID ownerUuid, int slot) {
-    }
+      public static ApiMessages.ActionResponse fail(String var0, String var1) {
+         return new ApiMessages.ActionResponse(false, var0, var1, null, 0L);
+      }
 
-    public record TopUpRequest(UUID requestId, UUID ownerUuid, int slot, long coins) {
-    }
+      public static ApiMessages.ActionResponse failWithRefund(String var0, String var1, long var2) {
+         return new ApiMessages.ActionResponse(false, var0, var1, null, var2);
+      }
+   }
 
-    public record RelocateRequest(UUID requestId, UUID ownerUuid, int slot, LocationData location) {
-    }
+   public record BridgeResponse(boolean success, String code, String message) {
+      public static ApiMessages.BridgeResponse ok(String var0) {
+         return new ApiMessages.BridgeResponse(true, "OK", var0);
+      }
 
-    public record StatusRequest(UUID ownerUuid) {
-    }
+      public static ApiMessages.BridgeResponse fail(String var0, String var1) {
+         return new ApiMessages.BridgeResponse(false, var0, var1);
+      }
+   }
 
-    public record ActionResponse(boolean success, String code, String message, LeaseView lease,
-                                 long refundableCoins) {
-        public static ActionResponse ok(String message, LeaseView lease) {
-            return new ActionResponse(true, "OK", message, lease, 0);
-        }
+   public record CreateRequest(UUID requestId, UUID ownerUuid, String ownerName, long reserveCoins, LocationData location) {
+   }
 
-        public static ActionResponse fail(String code, String message) {
-            return new ActionResponse(false, code, message, null, 0);
-        }
+   public record OwnerSlotRequest(UUID requestId, UUID ownerUuid, int slot) {
+   }
 
-        public static ActionResponse failWithRefund(String code, String message, long refundableCoins) {
-            return new ActionResponse(false, code, message, null, refundableCoins);
-        }
-    }
+   public record PlaceRequest(UUID leaseId, String botUsername, UUID ownerUuid, LocationData location) {
+   }
 
-    public record StatusResponse(
-        boolean success,
-        String code,
-        String message,
-        int poolSize,
-        int poolAvailable,
-        int maxPerPlayer,
-        long onlineRate,
-        long offlineRate,
-        List<LeaseView> leases
-    ) {
-    }
+   public record RefundRequest(UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) {
+   }
 
-    public record PlaceRequest(UUID leaseId, String botUsername, UUID ownerUuid, LocationData location) {
-    }
+   public record RelocateRequest(UUID requestId, UUID ownerUuid, int slot, LocationData location) {
+   }
 
-    public record RefundRequest(UUID refundId, UUID leaseId, UUID ownerUuid, long coins, String reason) {
-    }
+   public record StatusRequest(UUID ownerUuid) {
+   }
 
-    public record BridgeResponse(boolean success, String code, String message) {
-        public static BridgeResponse ok(String message) {
-            return new BridgeResponse(true, "OK", message);
-        }
+   public record StatusResponse(
+      boolean success,
+      String code,
+      String message,
+      int poolSize,
+      int poolAvailable,
+      int maxPerPlayer,
+      long onlineRate,
+      long offlineRate,
+      List<LeaseView> leases
+   ) {
+   }
 
-        public static BridgeResponse fail(String code, String message) {
-            return new BridgeResponse(false, code, message);
-        }
-    }
+   public record TopUpRequest(UUID requestId, UUID ownerUuid, int slot, long coins) {
+   }
 }

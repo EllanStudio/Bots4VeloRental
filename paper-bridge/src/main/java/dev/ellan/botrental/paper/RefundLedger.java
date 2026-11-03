@@ -10,33 +10,34 @@ import java.util.Properties;
 import java.util.UUID;
 
 final class RefundLedger {
-    private final Path file;
-    private final Properties entries = new Properties();
+   private final Path file;
+   private final Properties entries = new Properties();
 
-    RefundLedger(Path file) throws IOException {
-        this.file = file;
-        if (Files.exists(file)) {
-            try (InputStream input = Files.newInputStream(file)) {
-                entries.load(input);
-            }
-        }
-    }
+   RefundLedger(Path var1) throws IOException {
+      this.file = var1;
+      if (Files.exists(var1)) {
+         try (InputStream var2 = Files.newInputStream(var1)) {
+            this.entries.load(var2);
+         }
+      }
+   }
 
-    synchronized boolean contains(UUID refundId) {
-        return entries.containsKey(refundId.toString());
-    }
+   synchronized boolean contains(UUID var1) {
+      return this.entries.containsKey(var1.toString());
+   }
 
-    synchronized void record(UUID refundId, long coins) throws IOException {
-        entries.setProperty(refundId.toString(), Long.toString(coins));
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        try (OutputStream output = Files.newOutputStream(temporary)) {
-            entries.store(output, "Processed Bots4Velo rental refunds");
-        }
-        try {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        }
-        catch (IOException atomicFailure) {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
+   synchronized void record(UUID var1, long var2) throws IOException {
+      this.entries.setProperty(var1.toString(), Long.toString(var2));
+      Path var4 = this.file.resolveSibling(this.file.getFileName() + ".tmp");
+
+      try (OutputStream var5 = Files.newOutputStream(var4)) {
+         this.entries.store(var5, "Processed Bots4Velo rental refunds");
+      }
+
+      try {
+         Files.move(var4, this.file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+      } catch (IOException var9) {
+         Files.move(var4, this.file, StandardCopyOption.REPLACE_EXISTING);
+      }
+   }
 }
