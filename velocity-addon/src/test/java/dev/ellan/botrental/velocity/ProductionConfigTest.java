@@ -33,7 +33,8 @@ class ProductionConfigTest {
         assertThat(packages.enabled()).isTrue();
         assertThat(packages.pool()).hasSize(12).first().isEqualTo("BOT_11");
         assertThat(packages.pool()).last().isEqualTo("BOT_22");
-        assertThat(packages.maxPerPlayer()).isEqualTo(3);
+        assertThat(packages.maxPerPlayer()).isEqualTo(5);
+        assertThat(config.maxPerPlayer()).isEqualTo(5);
         assertThat(packages.maxCombat()).isEqualTo(4);
         assertThat(packages.allows("survival")).isTrue();
         assertThat(packages.allows("spawn")).isFalse();

@@ -39,7 +39,7 @@ public final class BotRentalAddon implements Bots4VeloAddon {
       this.context = var1;
       Files.createDirectories(this.context.dataDirectory());
       RentalConfig var2 = RentalConfig.load(this.context.dataDirectory());
-      if (var2.pool().size() == 10 && var2.maxPerPlayer() == 3) {
+      if (var2.pool().size() == 10 && var2.maxPerPlayer() >= 1 && var2.maxPerPlayer() <= 5) {
          LeaseStore var3 = new LeaseStore(this.context.dataDirectory().resolve("rentals.db"));
          this.leases = new LeaseManager(var2, this.context.bots(), new HttpRentalBridge(var2), var3, this.context.logger());
          this.eventListener = this.leases::onBotEvent;
@@ -68,7 +68,7 @@ public final class BotRentalAddon implements Bots4VeloAddon {
                   + var2.bridges().keySet()
             );
       } else {
-         throw new IllegalArgumentException("this deployment requires pool=10 and max-per-player=3");
+         throw new IllegalArgumentException("this deployment requires pool=10 and max-per-player between 1 and 5");
       }
    }
 

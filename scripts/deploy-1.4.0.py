@@ -16,14 +16,15 @@ BACKEND_SERVERS = ("redstone", "survival")
 VELOCITY_CORE = "bots4velo-3.0.9.jar"
 ADDON_JAR = "bots4velo-rental-addon-1.4.0.jar"
 PAPER_JAR = "bots4velo-rental-paper-1.4.0.jar"
-MENU_FILES = ("机器人租赁.yml", "机器人长期挂机.yml", "机器人套餐管理.yml")
+MENU_FILES = ("机器人租赁.yml", "机器人临时租.yml", "机器人长期挂机.yml", "机器人套餐管理.yml")
+PER_PLAYER = 5
 
 PACKAGES_YAML = '''
 # Long-term prepaid packages (1.4.0). The addon owns this price table; the paper bridges only display it.
 packages:
   enabled: true
   pool:
-''' + "".join(f'    - "BOT_{n}"\n' for n in LONG_BOTS) + '''  max-per-player: 3
+''' + "".join(f'    - "BOT_{n}"\n' for n in LONG_BOTS) + '''  max-per-player: 5
   max-combat: 4
   allowed-servers: [redstone, survival]
   refund-percent: 80            # of the unused whole days when a running package is cancelled
@@ -194,6 +195,18 @@ class Deployer:
         self.write_text(path, out)
         self.note("addon config: appended packages section (3 tiers, 1/7/30 days, pool BOT_11..BOT_22, redstone+survival)")
 
+    def raise_limits(self):
+        path = os.path.join(self.root, "velocity/plugins/bots4velo/addons/bot-rental/config.yml")
+        text = read(path)
+        out, n = re.subn(r"(?m)^(\s+max-per-player:\s*)3(\s*(?:#.*)?)$", rf"\g<1>{PER_PLAYER}\g<2>", text)
+        if n == 0:
+            self.note(f"addon config: max-per-player already {PER_PLAYER}, skipped")
+            return
+        data = yaml.safe_load(out)
+        assert data["rental"]["max-per-player"] == PER_PLAYER and data["packages"]["max-per-player"] == PER_PLAYER
+        self.write_text(path, out)
+        self.note(f"addon config: max-per-player 3 -> {PER_PLAYER} ({n} places: hourly + packages)")
+
     def paper_config(self, server):
         path = os.path.join(self.root, server, "plugins/Bots4VeloRental/config.yml")
         text = read(path)
@@ -305,6 +318,7 @@ def main():
     if args.only == "all":
         d.velocity_bots()
         d.addon_config()
+        d.raise_limits()
         for s in BACKEND_SERVERS:
             d.paper_config(s)
         d.jars()

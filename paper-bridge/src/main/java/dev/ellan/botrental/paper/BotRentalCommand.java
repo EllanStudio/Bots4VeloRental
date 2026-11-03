@@ -429,7 +429,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
 
    private static Integer slot(String var0) {
       Integer var1 = positiveInt(var0);
-      return var1 != null && var1 <= 9 ? var1 : null;
+      return var1 != null && var1 <= 20 ? var1 : null;
    }
 
    private static Integer positiveInt(String var0) {

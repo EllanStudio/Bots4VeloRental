@@ -114,7 +114,7 @@ record PackageConfig(
       }
 
       PackageConfig config = new PackageConfig(true, Collections.unmodifiableList(pool),
-         intOr(section.get("max-per-player"), 3), intOr(section.get("max-combat"), 4),
+         intOr(section.get("max-per-player"), 5), intOr(section.get("max-combat"), 4),
          Collections.unmodifiableList(servers), intOr(section.get("refund-percent"), 80),
          intOr(section.get("combat-surcharge-percent"), 50), Collections.unmodifiableMap(durations),
          Collections.unmodifiableMap(tiers));

@@ -9,7 +9,7 @@ rental:
   currency: "ellan_coin"
   online-rate-per-minute: 5
   offline-rate-per-minute: 20
-  max-per-player: 3
+  max-per-player: 5
   billing-period-seconds: 60
   startup-timeout-seconds: 90
   pool:
