@@ -17,7 +17,7 @@ dependencies {
     implementation(project(":common"))
     implementation("org.yaml:snakeyaml:2.5")
 
-    compileOnly("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:${providers.gradleProperty("paperApiVersion").orElse("1.21.8-R0.1-SNAPSHOT").get()}")
     compileOnly("su.nightexpress.excellenteconomy:ExcellentEconomy:2.8.0")
     compileOnly("me.clip:placeholderapi:2.11.6")
 

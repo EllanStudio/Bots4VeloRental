@@ -28,11 +28,13 @@ final class BridgeHttpServer implements AutoCloseable {
    private final RefundLedger refunds;
    private final Set<String> botUsernames;
    private final String serverId;
+   private final BotCombatService combat;
    private final HttpServer server;
    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-   BridgeHttpServer(final JavaPlugin var1, PaperRentalConfig var2, EconomyService var3, RefundLedger var4) throws IOException {
+   BridgeHttpServer(final JavaPlugin var1, PaperRentalConfig var2, EconomyService var3, RefundLedger var4, BotCombatService combat) throws IOException {
       this.plugin = var1;
+      this.combat = combat;
       this.economy = var3;
       this.refunds = var4;
       this.serverId = var2.serverId();
@@ -91,7 +93,7 @@ final class BridgeHttpServer implements AutoCloseable {
       CompletableFuture var2 = new CompletableFuture();
       Bukkit.getScheduler().runTask(this.plugin, () -> {
          try {
-            var2.complete(this.placeNow(var1.botUsername(), var1.location()));
+            var2.complete(this.placeNow(var1.botUsername(), var1.location(), var1));
          } catch (Throwable var4) {
             var2.completeExceptionally(var4);
          }
@@ -99,7 +101,7 @@ final class BridgeHttpServer implements AutoCloseable {
       return ((BridgeHttpServer.PlaceOutcome)var2.get(5L, TimeUnit.SECONDS)).response();
    }
 
-   private BridgeHttpServer.PlaceOutcome placeNow(String var1, LocationData var2) {
+   private BridgeHttpServer.PlaceOutcome placeNow(String var1, LocationData var2, ApiMessages.PlaceRequest request) {
       Player var3 = Bukkit.getPlayerExact(var1);
       World var4 = Bukkit.getWorld(var2.world());
       if (var3 == null || !var3.isOnline()) {
@@ -119,6 +121,8 @@ final class BridgeHttpServer implements AutoCloseable {
             var3.setCollidable(false);
             var3.setCanPickupItems(false);
             var3.setSleepingIgnored(true);
+            this.applyLoadRadius(var3, request);
+            this.combat.configure(var1, request);
             String var6 = String.format(
                Locale.ROOT,
                "minecraft:execute as %s in %s run minecraft:tp @s %.4f %.4f %.4f %.4f %.4f",
@@ -154,6 +158,23 @@ final class BridgeHttpServer implements AutoCloseable {
          }
       } else {
          return BridgeHttpServer.PlaceOutcome.fail("OUT_OF_BOUNDS", "Target Y is outside the world height for " + var2.world());
+      }
+   }
+
+   /**
+    * Long-term bots keep an area loaded; the smaller the radius, the cheaper they are for the server. Hourly
+    * rentals send no distances and keep the server defaults. Safe to call on every (re)placement.
+    */
+   private void applyLoadRadius(Player bot, ApiMessages.PlaceRequest request) {
+      int simulation = request.simulationDistance();
+      int view = request.viewDistance();
+      if (simulation >= 2) {
+         bot.setSimulationDistance(simulation);
+      }
+
+      if (view >= 2) {
+         bot.setViewDistance(view);
+         bot.setSendViewDistance(view);
       }
    }
 

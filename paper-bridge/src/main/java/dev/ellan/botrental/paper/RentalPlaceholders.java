@@ -51,10 +51,14 @@ final class RentalPlaceholders extends PlaceholderExpansion {
       return switch (var4) {
          case "pool_available" -> Integer.toString(var3.poolAvailable());
          case "pool_size" -> Integer.toString(var3.poolSize());
-         case "active_count" -> Integer.toString(var3.leases().size());
+         case "active_count" -> Long.toString(var3.leases().stream().filter(lease -> !lease.isPackage()).count());
          case "max_per_player" -> Integer.toString(var3.maxPerPlayer());
          case "online_rate" -> Long.toString(var3.onlineRate());
          case "offline_rate" -> Long.toString(var3.offlineRate());
+         case "pack_pool_available" -> Integer.toString(var3.packagePoolAvailable());
+         case "pack_pool_size" -> Integer.toString(var3.packagePoolSize());
+         case "pack_max_per_player" -> Integer.toString(var3.maxPackagesPerPlayer());
+         case "pack_active_count" -> Long.toString(var3.leases().stream().filter(LeaseView::isPackage).count());
          default -> this.slotValue(var3, var2);
       };
    }
@@ -75,7 +79,8 @@ final class RentalPlaceholders extends PlaceholderExpansion {
 
             return switch (var10) {
                case "status" -> "\u7a7a\u95f2";
-               case "bot", "server" -> "\u6682\u65e0";
+               case "bot", "server", "plan", "tier", "remaining" -> "\u6682\u65e0";
+               case "combat" -> "\u5426";
                default -> "0";
             };
          } else {
@@ -88,6 +93,11 @@ final class RentalPlaceholders extends PlaceholderExpansion {
                case "spent" -> Long.toString(var5.spentCoins());
                case "rate" -> Long.toString(var5.currentRate());
                case "minutes" -> Long.toString(var5.estimatedMinutes());
+               case "plan" -> var5.isPackage() ? "\u957f\u671f\u5957\u9910" : "\u6309\u5206\u949f";
+               case "tier" -> var5.tier() == null || var5.tier().isEmpty() ? "" : var1.offers().stream().filter(o -> o.tier().equalsIgnoreCase(var5.tier())).map(ApiMessages.PackageOffer::tierName).findFirst().orElse(var5.tier());
+               case "combat" -> var5.combat() ? "\u662f" : "\u5426";
+               case "remaining" -> var5.isPackage() ? (var5.expiresAt() > 0L ? BotRentalCommand.formatMinutes(var5.estimatedMinutes()) : "\u7b49\u5f85\u5230\u8fbe") : "";
+               case "days" -> Integer.toString(var5.packageDays());
                case "world" -> var5.location().world();
                case "server" -> this.plugin.rentalConfig().displayName(var5.location().server());
                case "location" -> String.format(

@@ -1,6 +1,7 @@
 package dev.ellan.botrental.paper;
 
 import dev.ellan.botrental.common.ApiMessages;
+import dev.ellan.botrental.common.LeaseView;
 import dev.ellan.botrental.common.LocationData;
 import dev.ellan.botrental.common.SignedHttpClient;
 import java.util.UUID;
@@ -19,6 +20,14 @@ final class AddonClient {
    ApiMessages.ActionResponse create(UUID var1, String var2, long var3, LocationData var5) throws Exception {
       ApiMessages.CreateRequest var6 = new ApiMessages.CreateRequest(UUID.randomUUID(), var1, var2, var3, var5);
       return this.post("/v1/leases/create", var6, ApiMessages.ActionResponse.class);
+   }
+
+   ApiMessages.ActionResponse createPackage(
+      UUID owner, String ownerName, long paid, LocationData location, String tier, int days, boolean combat
+   ) throws Exception {
+      ApiMessages.CreateRequest request = new ApiMessages.CreateRequest(
+         UUID.randomUUID(), owner, ownerName, paid, location, LeaseView.PACKAGE, tier, days, combat);
+      return this.post("/v1/leases/create", request, ApiMessages.ActionResponse.class);
    }
 
    ApiMessages.ActionResponse cancel(UUID var1, int var2) throws Exception {

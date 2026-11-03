@@ -53,8 +53,8 @@ record PaperRentalConfig(
          || this.rentOptions.stream().anyMatch(var0 -> var0 <= 0)
          || this.topUpOptions.isEmpty()
          || this.topUpOptions.stream().anyMatch(var0 -> var0 <= 0L)
-         || this.botUsernames.size() != 10) {
-         throw new IllegalArgumentException("rent options, top-up options and exactly 10 bot usernames are required");
+         || this.botUsernames.isEmpty()) {
+         throw new IllegalArgumentException("rent options, top-up options and at least one bot username are required");
       }
    }
 

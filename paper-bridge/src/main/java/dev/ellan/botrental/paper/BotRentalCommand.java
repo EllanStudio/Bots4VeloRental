@@ -3,6 +3,7 @@ package dev.ellan.botrental.paper;
 import dev.ellan.botrental.common.ApiMessages;
 import dev.ellan.botrental.common.LeaseView;
 import dev.ellan.botrental.common.LocationData;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -70,6 +71,26 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
                }
             }
 
+            if (var4[0].equalsIgnoreCase("pack") && (var4.length == 3 || var4.length == 4)) {
+               Integer packDays = positiveInt(var4[2]);
+               boolean packCombat = var4.length == 4 && (var4[3].equalsIgnoreCase("combat") || var4[3].equals("\u6218\u6597"));
+               if (packDays != null && (var4.length == 3 || packCombat)) {
+                  String packTier = var4[1].toLowerCase(Locale.ROOT);
+                  LocationData packLocation = this.plugin.location(var5.getLocation());
+                  this.submit(var5, () -> this.buyPackage(var5, packTier, packDays, packCombat, packLocation));
+                  return true;
+               }
+            }
+
+            if (var4[0].equalsIgnoreCase("gear") && (var4.length == 2 || var4.length == 3)) {
+               Integer gearSlot = slot(var4[1]);
+               boolean take = var4.length == 3 && (var4[2].equalsIgnoreCase("take") || var4[2].equals("\u53d6\u56de"));
+               if (gearSlot != null && (var4.length == 2 || take)) {
+                  this.submit(var5, () -> this.gear(var5, gearSlot, take));
+                  return true;
+               }
+            }
+
             if (var4[0].equalsIgnoreCase("topup") && var4.length == 3) {
                Integer var9 = slot(var4[1]);
                Long var7 = positiveLong(var4[2]);
@@ -84,7 +105,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
                this.plugin
                   .message(
                      var5.getUniqueId(),
-                     "&7\u7528\u6cd5\uff1a&f/botrent &7| &f/botrent status &7| &f/botrent rent <\u5206\u949f> &7| &f/botrent topup <\u79df\u8d41\u4f4d> <\u91d1\u5e01> &7| &f/botrent relocate <\u79df\u8d41\u4f4d> &7| &f/botrent cancel <\u79df\u8d41\u4f4d>"
+                     "&7\u7528\u6cd5\uff1a&f/botrent &7| &f/botrent status &7| &f/botrent rent <\u5206\u949f> &7| &f/botrent topup <\u79df\u8d41\u4f4d> <\u91d1\u5e01> &7| &f/botrent pack <\u6863\u4f4d> <\u5929\u6570> [combat] &7| &f/botrent gear <\u79df\u8d41\u4f4d> [take] &7| &f/botrent relocate <\u79df\u8d41\u4f4d> &7| &f/botrent cancel <\u79df\u8d41\u4f4d>"
                   );
                return true;
             }
@@ -113,48 +134,136 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
       }
    }
 
-   private void showStatus(UUID var1) {
+   private void showStatus(UUID owner) {
       try {
-         ApiMessages.StatusResponse var2 = this.plugin.addon().status(var1);
-         this.plugin.statusCache().put(var1, var2);
-         this.plugin
-            .message(
-               var1,
-               "&7\u673a\u5668\u4eba\u6c60\uff1a&f"
-                  + var2.poolAvailable()
-                  + "/"
-                  + var2.poolSize()
-                  + " &7| \u5728\u7ebf\uff1a&e"
-                  + var2.onlineRate()
-                  + "/\u5206\u949f &7| \u79bb\u7ebf\uff1a&c"
-                  + var2.offlineRate()
-                  + "/\u5206\u949f"
-            );
-         if (var2.leases().isEmpty()) {
-            this.plugin.message(var1, "&7\u4f60\u76ee\u524d\u6ca1\u6709\u6b63\u5728\u8fd0\u884c\u7684\u6302\u673a\u673a\u5668\u4eba\u3002");
+         ApiMessages.StatusResponse status = this.plugin.addon().status(owner);
+         this.plugin.statusCache().put(owner, status);
+         this.plugin.message(owner, "&7\u673a\u5668\u4eba\u6c60\uff1a&f" + status.poolAvailable() + "/" + status.poolSize()
+            + " &7| \u5728\u7ebf\uff1a&e" + status.onlineRate() + "/\u5206\u949f &7| \u79bb\u7ebf\uff1a&c" + status.offlineRate() + "/\u5206\u949f");
+         if (status.packagePoolSize() > 0) {
+            this.plugin.message(owner, "&7\u957f\u671f\u6302\u673a\u6c60\uff1a&f" + status.packagePoolAvailable() + "/" + status.packagePoolSize()
+               + " &7| \u6bcf\u4eba\u6700\u591a &f" + status.maxPackagesPerPlayer() + " &7\u4e2a");
          }
 
-         for (LeaseView var4 : var2.leases()) {
-            this.plugin
-               .message(
-                  var1,
-                  "&7\u79df\u8d41\u4f4d "
-                     + var4.slot()
-                     + "\uff1a&f"
-                     + var4.botUsername()
-                     + " &7\u4f4d\u4e8e &f"
-                     + this.plugin.rentalConfig().displayName(var4.location().server())
-                     + " &7\u72b6\u6001 &f"
-                     + stateName(var4.state())
-                     + " &7\u4f59\u989d &e"
-                     + var4.reserveCoins()
-                     + " &7\u7ea6 "
-                     + var4.estimatedMinutes()
-                     + " \u5206\u949f"
-               );
+         if (status.leases().isEmpty()) {
+            this.plugin.message(owner, "&7\u4f60\u76ee\u524d\u6ca1\u6709\u6b63\u5728\u8fd0\u884c\u7684\u6302\u673a\u673a\u5668\u4eba\u3002");
          }
-      } catch (Exception var5) {
-         throw new RuntimeException(var5);
+
+         for (LeaseView lease : status.leases()) {
+            String where = this.plugin.rentalConfig().displayName(lease.location().server());
+            if (lease.isPackage()) {
+               String remaining = lease.expiresAt() > 0L ? "&7\u5269\u4f59 &e" + formatMinutes(lease.estimatedMinutes()) : "&7\u7b49\u5f85\u5230\u8fbe\u540e\u5f00\u59cb\u8ba1\u65f6";
+               this.plugin.message(owner, "&7\u79df\u8d41\u4f4d " + lease.slot() + "\uff1a&f" + lease.botUsername() + " &d[\u957f\u671f\u00b7" + tierName(status, lease.tier())
+                  + (lease.combat() ? "\u00b7\u6218\u6597" : "") + "] &7\u4f4d\u4e8e &f" + where + " &7\u72b6\u6001 &f" + stateName(lease.state()) + " " + remaining);
+            } else {
+               this.plugin.message(owner, "&7\u79df\u8d41\u4f4d " + lease.slot() + "\uff1a&f" + lease.botUsername() + " &7\u4f4d\u4e8e &f" + where
+                  + " &7\u72b6\u6001 &f" + stateName(lease.state()) + " &7\u4f59\u989d &e" + lease.reserveCoins() + " &7\u7ea6 " + lease.estimatedMinutes() + " \u5206\u949f");
+            }
+         }
+      } catch (Exception failure) {
+         throw new RuntimeException(failure);
+      }
+   }
+
+   private static String tierName(ApiMessages.StatusResponse status, String tier) {
+      return status.offers().stream().filter(offer -> offer.tier().equalsIgnoreCase(tier)).map(ApiMessages.PackageOffer::tierName).findFirst().orElse(tier);
+   }
+
+   static String formatMinutes(long minutes) {
+      if (minutes >= 1440L) {
+         return (minutes / 1440L) + "\u5929" + ((minutes % 1440L) / 60L) + "\u5c0f\u65f6";
+      }
+
+      return minutes >= 60L ? (minutes / 60L) + "\u5c0f\u65f6" + (minutes % 60L) + "\u5206" : minutes + "\u5206\u949f";
+   }
+
+   private void gear(Player player, int slot, boolean take) {
+      UUID id = player.getUniqueId();
+      try {
+         LeaseView lease = find(this.plugin.addon().status(id), slot);
+         if (lease == null) {
+            this.plugin.message(id, "&c\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u79df\u8d41\u4f4d\u3002");
+            return;
+         }
+
+         if (!lease.isPackage() || !lease.combat()) {
+            this.plugin.message(id, "&c\u53ea\u6709\u6218\u6597\u578b\u957f\u671f\u5957\u9910\u7684\u673a\u5668\u4eba\u624d\u80fd\u4fdd\u7ba1\u7269\u54c1\u3002");
+            return;
+         }
+
+         if (!this.plugin.rentalConfig().serverId().equalsIgnoreCase(lease.location().server())) {
+            this.plugin.message(id, "&c\u8fd9\u4e2a\u673a\u5668\u4eba\u5728 " + this.plugin.rentalConfig().displayName(lease.location().server())
+               + "\uff0c\u8bf7\u5230\u90a3\u4e2a\u670d\u52a1\u5668\u518d\u6267\u884c\u8fd9\u4e2a\u547d\u4ee4\u3002");
+            return;
+         }
+
+         String result = this.plugin.callSync(() -> take ? this.plugin.combat().withdraw(player, lease) : this.plugin.combat().deposit(player, lease));
+         this.plugin.message(id, result);
+      } catch (Exception failure) {
+         throw new RuntimeException(failure);
+      }
+   }
+
+   private void buyPackage(Player player, String tierId, int days, boolean combat, LocationData location) {
+      UUID id = player.getUniqueId();
+      try {
+         ApiMessages.StatusResponse status = this.plugin.addon().status(id);
+         this.plugin.statusCache().put(id, status);
+         ApiMessages.PackageOffer offer = status.offers().stream()
+            .filter(candidate -> candidate.tier().equalsIgnoreCase(tierId) && candidate.days() == days).findFirst().orElse(null);
+         if (offer == null) {
+            String options = status.offers().stream().map(o -> o.tier() + "/" + o.days() + "\u5929").distinct().toList().toString();
+            this.plugin.message(id, status.offers().isEmpty() ? "&c\u957f\u671f\u6302\u673a\u5957\u9910\u6682\u672a\u5f00\u653e\u3002" : "&c\u6ca1\u6709\u8fd9\u4e2a\u5957\u9910\u3002\u53ef\u9009\uff1a" + options);
+            return;
+         }
+
+         if (status.leases().stream().filter(LeaseView::isPackage).count() >= status.maxPackagesPerPlayer()) {
+            this.plugin.message(id, "&c\u4f60\u5df2\u7ecf\u6709 " + status.maxPackagesPerPlayer() + " \u4e2a\u957f\u671f\u6302\u673a\u5957\u9910\u4e86\u3002");
+            return;
+         }
+
+         if (status.packagePoolAvailable() <= 0) {
+            this.plugin.message(id, "&c\u957f\u671f\u6302\u673a\u673a\u5668\u4eba\u6682\u65f6\u6ca1\u6709\u7a7a\u4f4d\u3002");
+            return;
+         }
+
+         long price = combat ? offer.combatPrice() : offer.price();
+         if (this.plugin.economy().balance(id).get(8L, TimeUnit.SECONDS) < price) {
+            this.plugin.message(id, "&c\u4f59\u989d\u4e0d\u8db3\uff0c\u672c\u6b21\u9700\u8981 " + price + " \u679a\u827e\u5c14\u5c9a\u91d1\u5e01\u3002");
+            return;
+         }
+
+         if (!this.plugin.economy().withdraw(id, price).get(8L, TimeUnit.SECONDS)) {
+            this.plugin.message(id, "&c\u6263\u6b3e\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002");
+            return;
+         }
+
+         ApiMessages.ActionResponse response;
+         try {
+            response = this.plugin.addon().createPackage(id, player.getName(), price, location, offer.tier(), days, combat);
+         } catch (Exception failure) {
+            // The request may have reached the addon even though we did not get its answer: check before refunding.
+            ApiMessages.StatusResponse after = this.plugin.addon().status(id);
+            if (after.leases().stream().filter(LeaseView::isPackage).count() > status.leases().stream().filter(LeaseView::isPackage).count()) {
+               this.plugin.statusCache().put(id, after);
+               this.plugin.message(id, "&a\u5957\u9910\u5df2\u521b\u5efa\uff0c\u673a\u5668\u4eba\u6b63\u5728\u524d\u5f80\u4f60\u521a\u624d\u7684\u4f4d\u7f6e\u3002");
+               return;
+            }
+
+            this.refundLocal(id, price);
+            throw failure;
+         }
+
+         if (!response.success()) {
+            this.refundLocal(id, Math.max(response.refundableCoins(), 0L) > 0L ? response.refundableCoins() : price);
+            this.plugin.message(id, "&c" + response.message());
+         } else {
+            this.plugin.statusCache().updateLease(id, response.lease());
+            this.plugin.message(id, "&a" + response.message() + " &7\u5df2\u652f\u4ed8 &e" + price + " &7\u91d1\u5e01\u3002");
+            this.plugin.refresh(id);
+         }
+      } catch (Exception failure) {
+         throw new RuntimeException(failure);
       }
    }
 
@@ -162,7 +271,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
       try {
          ApiMessages.StatusResponse var5 = this.plugin.addon().status(var1);
          this.plugin.statusCache().put(var1, var5);
-         if (var5.leases().size() >= var5.maxPerPlayer()) {
+         if (var5.leases().stream().filter(lease -> !lease.isPackage()).count() >= var5.maxPerPlayer()) {
             this.plugin.message(var1, "&c\u4f60\u5df2\u7ecf\u79df\u6ee1 " + var5.maxPerPlayer() + " \u4e2a\u673a\u5668\u4eba\u3002");
          } else if (var5.poolAvailable() <= 0) {
             this.plugin.message(var1, "&c\u673a\u5668\u4eba\u6c60\u6682\u65f6\u6ca1\u6709\u7a7a\u4f4d\u3002");
@@ -212,6 +321,8 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
          LeaseView var6 = find(var5, var2);
          if (var6 == null) {
             this.plugin.message(var1, "&c\u6ca1\u6709\u627e\u5230\u8fd9\u4e2a\u79df\u8d41\u4f4d\u3002");
+         } else if (var6.isPackage()) {
+            this.plugin.message(var1, "&c\u957f\u671f\u6302\u673a\u5957\u9910\u4e0d\u80fd\u5145\u503c\uff0c\u5230\u671f\u540e\u53ef\u4ee5\u91cd\u65b0\u8d2d\u4e70\u3002");
          } else if (this.plugin.economy().balance(var1).get(8L, TimeUnit.SECONDS) < var3) {
             this.plugin.message(var1, "&c\u4f59\u989d\u4e0d\u8db3\uff0c\u672c\u6b21\u9700\u8981 " + var3 + " \u679a\u827e\u5c14\u5c9a\u91d1\u5e01\u3002");
          } else if (!this.plugin.economy().withdraw(var1, var3).get(8L, TimeUnit.SECONDS)) {
@@ -300,7 +411,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
 
    private static Integer slot(String var0) {
       Integer var1 = positiveInt(var0);
-      return var1 != null && var1 <= 3 ? var1 : null;
+      return var1 != null && var1 <= 9 ? var1 : null;
    }
 
    private static Integer positiveInt(String var0) {
@@ -323,11 +434,23 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
 
    public List<String> onTabComplete(CommandSender var1, Command var2, String var3, String[] var4) {
       if (var4.length == 1) {
-         return filter(List.of("menu", "status", "rent", "topup", "relocate", "cancel"), var4[0]);
+         return filter(List.of("menu", "status", "rent", "pack", "gear", "topup", "relocate", "cancel"), var4[0]);
       } else if (var4.length == 2 && var4[0].equalsIgnoreCase("rent")) {
          return filter(this.plugin.rentalConfig().rentOptions().stream().map(String::valueOf).toList(), var4[1]);
-      } else if (var4.length == 2 && Set.of("topup", "relocate", "cancel").contains(var4[0].toLowerCase())) {
-         return filter(List.of("1", "2", "3"), var4[1]);
+      } else if (var4.length >= 2 && var4[0].equalsIgnoreCase("pack") && var1 instanceof Player completing) {
+         ApiMessages.StatusResponse cached = this.plugin.statusCache().get(completing.getUniqueId()).orElse(null);
+         List<ApiMessages.PackageOffer> offers = cached == null ? List.of() : cached.offers();
+         if (var4.length == 2) {
+            return filter(offers.stream().map(ApiMessages.PackageOffer::tier).distinct().toList(), var4[1]);
+         } else if (var4.length == 3) {
+            return filter(offers.stream().map(offer -> Integer.toString(offer.days())).distinct().toList(), var4[2]);
+         } else {
+            return filter(List.of("combat"), var4[3]);
+         }
+      } else if (var4.length == 3 && var4[0].equalsIgnoreCase("gear")) {
+         return filter(List.of("take"), var4[2]);
+      } else if (var4.length == 2 && Set.of("topup", "relocate", "cancel", "gear").contains(var4[0].toLowerCase())) {
+         return filter(List.of("1", "2", "3", "4", "5", "6"), var4[1]);
       } else {
          return var4.length == 3 && var4[0].equalsIgnoreCase("topup")
             ? filter(this.plugin.rentalConfig().topUpOptions().stream().map(String::valueOf).toList(), var4[2])

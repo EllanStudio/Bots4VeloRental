@@ -10,8 +10,10 @@ import java.util.UUID;
 
 final class HttpRentalBridge implements RentalBridge {
    private final Map<String, SignedHttpClient> clients = new LinkedHashMap<>();
+   private final RentalConfig config;
 
    HttpRentalBridge(RentalConfig var1) {
+      this.config = var1;
       var1.bridges().forEach((var2, var3) -> this.clients.put(var2, new SignedHttpClient(var3, var1.sharedSecret())));
    }
 
@@ -22,7 +24,9 @@ final class HttpRentalBridge implements RentalBridge {
          return false;
       }
 
-      ApiMessages.BridgeResponse var6 = var5.post("/v1/bridge/place", new ApiMessages.PlaceRequest(var1, var2, var3, var4, tier, combat), ApiMessages.BridgeResponse.class);
+      ApiMessages.BridgeResponse var6 = var5.post("/v1/bridge/place", new ApiMessages.PlaceRequest(var1, var2, var3, var4, tier == null ? "" : tier, combat,
+            this.config.packages().tier(tier).map(PackageConfig.Tier::simulationDistance).orElse(0),
+            this.config.packages().tier(tier).map(PackageConfig.Tier::viewDistance).orElse(0)), ApiMessages.BridgeResponse.class);
       return var6.success();
    }
 

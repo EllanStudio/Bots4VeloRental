@@ -54,10 +54,11 @@ public final class ApiMessages {
 
    /** Ask the backend to put a bot at a location. {@code tier} (empty for hourly) selects its chunk-load radius. */
    public record PlaceRequest(
-      UUID leaseId, String botUsername, UUID ownerUuid, LocationData location, String tier, boolean combat
+      UUID leaseId, String botUsername, UUID ownerUuid, LocationData location, String tier, boolean combat,
+      int simulationDistance, int viewDistance
    ) {
       public PlaceRequest(UUID leaseId, String botUsername, UUID ownerUuid, LocationData location) {
-         this(leaseId, botUsername, ownerUuid, location, "", false);
+         this(leaseId, botUsername, ownerUuid, location, "", false, 0, 0);
       }
    }
 

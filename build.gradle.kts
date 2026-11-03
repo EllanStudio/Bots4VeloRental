@@ -4,7 +4,7 @@ plugins {
 
 allprojects {
     group = "dev.ellan.botrental"
-    version = providers.gradleProperty("pluginVersion").orElse("1.2.0").get()
+    version = providers.gradleProperty("pluginVersion").orElse("1.4.0").get()
 
     repositories {
         mavenLocal()

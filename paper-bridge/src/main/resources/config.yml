@@ -20,3 +20,18 @@ bot-usernames:
   - "BOT_8"
   - "BOT_9"
   - "BOT_10"
+
+# Combat bots (long-term packages with the combat option): they hold an item handed over with
+# /botrent gear <slot> and hit nearby hostile mobs. They never fight players, pets or villagers and
+# never pick up items or experience.
+combat:
+  enabled: true
+  interval-ticks: 4          # how often a bot looks for a target
+  reach: 3.0                 # vanilla survival reach, measured to the target's hitbox
+  line-of-sight: true
+  exclude-types:             # mobs that must never be hit (neutral until provoked, bosses, ...)
+    - ENDERMAN
+    - ZOMBIFIED_PIGLIN
+    - PIGLIN
+    - PIGLIN_BRUTE
+    - WARDEN

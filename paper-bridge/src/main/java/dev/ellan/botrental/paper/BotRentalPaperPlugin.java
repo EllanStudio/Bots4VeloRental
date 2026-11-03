@@ -2,9 +2,12 @@ package dev.ellan.botrental.paper;
 
 import dev.ellan.botrental.common.LocationData;
 import java.nio.file.Files;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -26,6 +29,7 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
    private BridgeHttpServer bridgeServer;
    private ExecutorService executor;
    private RentalPlaceholders placeholders;
+   private BotCombatService combat;
 
    public void onEnable() {
       try {
@@ -35,8 +39,15 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
          this.addon = new AddonClient(this.rentalConfig);
          this.economy = new EconomyService(this.rentalConfig.currency());
          this.statusCache = new StatusCache();
+         this.combat = new BotCombatService(
+            this,
+            CombatSettings.load(this.getConfig(), this.getLogger()),
+            new GearStore(this.getDataFolder().toPath().resolve("bot-gear.properties")),
+            this.rentalConfig.botUsernames().stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toUnmodifiableSet()));
+         this.combat.start();
          this.bridgeServer = new BridgeHttpServer(
-            this, this.rentalConfig, this.economy, new RefundLedger(this.getDataFolder().toPath().resolve("processed-refunds.properties"))
+            this, this.rentalConfig, this.economy, new RefundLedger(this.getDataFolder().toPath().resolve("processed-refunds.properties")),
+            this.combat
          );
          this.bridgeServer.start();
          this.executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -55,6 +66,14 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
          }
 
          Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::refreshOnlinePlayers, 40L, 100L);
+         // Items held by combat bots go back to their owners once the lease is gone (checked once a minute).
+         Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> this.combat.reconcile(owner -> {
+            try {
+               return this.addon.status(owner);
+            } catch (Exception unavailable) {
+               throw new IllegalStateException(unavailable);
+            }
+         }), 1200L, 1200L);
          this.getLogger().info("Bots4Velo rental bridge enabled for server " + this.rentalConfig.serverId() + ".");
       } catch (Exception var3) {
          this.getLogger().log(Level.SEVERE, "Could not enable Bots4Velo rental bridge", var3);
@@ -66,6 +85,11 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
       if (this.placeholders != null) {
          this.placeholders.unregister();
          this.placeholders = null;
+      }
+
+      if (this.combat != null) {
+         this.combat.close();
+         this.combat = null;
       }
 
       if (this.bridgeServer != null) {
@@ -87,6 +111,15 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
    @EventHandler
    public void onQuit(PlayerQuitEvent var1) {
       this.statusCache.remove(var1.getPlayer().getUniqueId());
+   }
+
+   /** Run something on the server thread and wait for its result (call only from a worker thread). */
+   <T> T callSync(Callable<T> task) throws Exception {
+      return Bukkit.getScheduler().callSyncMethod(this, task).get(5L, TimeUnit.SECONDS);
+   }
+
+   BotCombatService combat() {
+      return this.combat;
    }
 
    void runAsync(Runnable var1) {
