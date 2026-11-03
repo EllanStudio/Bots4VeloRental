@@ -27,7 +27,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
-   static final String PREFIX = "&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r";
+   static final String PREFIX = "&6\u6302\u673a\u673a\u5668\u4eba &8| &r";
    private PaperRentalConfig rentalConfig;
    private AddonClient addon;
    private EconomyService economy;
@@ -139,7 +139,7 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
       Bukkit.getScheduler().runTask(this, () -> {
          Player var2x = Bukkit.getPlayer(var1);
          if (var2x != null) {
-            var2x.sendMessage(color("&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r" + var2));
+            var2x.sendMessage(color("&6\u6302\u673a\u673a\u5668\u4eba &8| &r" + var2));
          }
       });
    }
@@ -179,7 +179,7 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
       if (!var2) {
          var1.sendMessage(
             color(
-               "&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r&c\u83dc\u5355\u6682\u65f6\u65e0\u6cd5\u6253\u5f00\uff0c\u8bf7\u4f7f\u7528 &f/botrent status &c\u67e5\u770b\u72b6\u6001\u3002"
+               "&6\u6302\u673a\u673a\u5668\u4eba &8| &r&c\u83dc\u5355\u6682\u65f6\u65e0\u6cd5\u6253\u5f00\uff0c\u8bf7\u4f7f\u7528 &f/botrent status &c\u67e5\u770b\u72b6\u6001\u3002"
             )
          );
       }

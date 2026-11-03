@@ -35,7 +35,7 @@ final class BotRentalCommand implements CommandExecutor, TabCompleter {
    public boolean onCommand(CommandSender var1, Command var2, String var3, String[] var4) {
       if (var1 instanceof Player var5) {
          if (!var5.hasPermission("botrental.use")) {
-            var5.sendMessage(BotRentalPaperPlugin.color("&7[&e!&7]&3&l\u6302\u673a\u673a\u5668\u4eba &r&c\u4f60\u6ca1\u6709\u4f7f\u7528\u6743\u9650\u3002"));
+            var5.sendMessage(BotRentalPaperPlugin.color("&6\u6302\u673a\u673a\u5668\u4eba &8| &r&c\u4f60\u6ca1\u6709\u4f7f\u7528\u6743\u9650\u3002"));
             return true;
          }
 
