@@ -7,6 +7,7 @@ import dev.nulli0n.vbot.addon.api.AddonBotService;
 import dev.nulli0n.vbot.addon.api.AddonBotSnapshot;
 import dev.nulli0n.vbot.addon.api.AddonBotState;
 import dev.nulli0n.vbot.addon.api.AddonLogger;
+import dev.nulli0n.vbot.addon.api.AddonServerSwitchResult;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -16,7 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 import java.util.Map.Entry;
 
 final class LeaseManager implements AutoCloseable {
@@ -28,6 +31,8 @@ final class LeaseManager implements AutoCloseable {
    private final AddonLogger logger;
    private final Clock clock;
    private final Map<UUID, Lease> leases = new HashMap<>();
+   /** Connection-local positive authentication evidence from Bots4Velo. */
+   private final Set<String> authenticatedBots = new HashSet<>();
    private final Map<UUID, ApiMessages.ActionResponse> recentRequests = new LinkedHashMap<UUID, ApiMessages.ActionResponse>() {
       @Override
       protected boolean removeEldestEntry(Entry<UUID, ApiMessages.ActionResponse> var1) {
@@ -49,6 +54,11 @@ final class LeaseManager implements AutoCloseable {
 
       for (Lease var8 : var4.loadOpen()) {
          this.leases.put(var8.id, var8);
+         // Event listeners are registered after this constructor returns. A bot that was already
+         // authenticated before an addon reload would otherwise have no event to observe and could
+         // stay in STARTING forever, so seed the evidence from the core snapshot.
+         this.bots.bot(var8.botId).filter(AddonBotSnapshot::authenticationComplete)
+            .ifPresent(snapshot -> this.authenticatedBots.add(var8.botId.toLowerCase()));
       }
    }
 
@@ -308,7 +318,15 @@ final class LeaseManager implements AutoCloseable {
    synchronized void onBotEvent(AddonBotEvent var1) {
       if (var1 != null) {
          Lease var2 = this.leases.values().stream().filter(var1x -> var1x.botId.equalsIgnoreCase(var1.botId())).findFirst().orElse(null);
+         if (var2 != null && var2.state != LeaseState.REFUND_PENDING && "AUTHENTICATED".equals(var1.type())) {
+            this.authenticatedBots.add(var2.botId.toLowerCase());
+            return;
+         }
+
          if (var2 != null && var2.state != LeaseState.REFUND_PENDING && ("DISCONNECTED".equals(var1.type()) || "STOPPED".equals(var1.type()))) {
+            this.authenticatedBots.remove(var2.botId.toLowerCase());
+            var2.serverSwitchGeneration++;
+            var2.serverSwitchInFlight = false;
             var2.state = LeaseState.STARTING;
             var2.startDeadline = this.now() + this.config.startupTimeoutSeconds() * 1000L;
             var2.lastActionAt = 0L;
@@ -357,17 +375,27 @@ final class LeaseManager implements AutoCloseable {
                "\u8be5\u670d\u52a1\u5668\u5df2\u505c\u6b62\u673a\u5668\u4eba\u79df\u8d41\uff0c\u9884\u5b58\u91d1\u5e01\u5c06\u5168\u90e8\u9000\u56de\u3002"
             );
          } else if (var4.state() == AddonBotState.PLAY) {
+            // PLAY only means the transport is connected. Gate the first server switch on the core's
+            // confirmed AuthMe/VeloAuth state, otherwise a pending authentication conversation turns
+            // into a noisy retry loop. Never infer authentication from PLAY alone.
+            String botKey = var1.botId.toLowerCase();
+            if (!this.authenticatedBots.contains(botKey)) {
+               if (!var4.authenticationComplete()) {
+                  return;
+               }
+
+               this.authenticatedBots.add(botKey);
+            }
+
             String var5 = this.bots.currentServer(var1.botId).orElse("");
             if (!var5.equalsIgnoreCase(var1.location.server())) {
-               if (var2 - var1.lastActionAt >= 5000L) {
-                  this.bots.switchServer(var1.botId, var1.location.server());
-                  var1.lastActionAt = var2;
-                  this.save(var1);
+               if (!var1.serverSwitchInFlight && var2 - var1.lastActionAt >= 5000L) {
+                  this.requestServerSwitch(var1, var2);
                }
             } else if (this.bridge.place(var1.id, var1.botUsername, var1.ownerUuid, var1.location)) {
                this.activate(var1);
             }
-         } else if (var2 - var1.lastActionAt >= 10000L) {
+         } else if (!var1.serverSwitchInFlight && var2 - var1.lastActionAt >= 10000L) {
             if (var4.state() == AddonBotState.RECONNECT_WAIT || var4.state() == AddonBotState.FAILED) {
                this.bots.reconnect(var1.botId);
             } else if (var4.state() == AddonBotState.STOPPED) {
@@ -376,6 +404,56 @@ final class LeaseManager implements AutoCloseable {
 
             var1.lastActionAt = var2;
             this.save(var1);
+         }
+      }
+   }
+
+   private void requestServerSwitch(Lease lease, long now) {
+      long generation = ++lease.serverSwitchGeneration;
+      lease.serverSwitchInFlight = true;
+      lease.lastActionAt = now;
+      this.save(lease);
+
+      CompletionStage<AddonServerSwitchResult> request;
+      try {
+         request = this.bots.switchServer(lease.botId, lease.location.server());
+      } catch (RuntimeException failure) {
+         if (lease.serverSwitchGeneration == generation) {
+            lease.serverSwitchInFlight = false;
+         }
+
+         this.logger.warn("Server switch request failed for " + lease.botId + ": " + failure.getMessage());
+         return;
+      }
+
+      if (request == null) {
+         if (lease.serverSwitchGeneration == generation) {
+            lease.serverSwitchInFlight = false;
+         }
+
+         this.logger.warn("Server switch service returned no result for " + lease.botId);
+         return;
+      }
+
+      request.whenComplete((result, failure) -> this.onServerSwitchResult(lease, generation, result, failure));
+   }
+
+   private void onServerSwitchResult(Lease lease, long generation, AddonServerSwitchResult result, Throwable failure) {
+      synchronized (this) {
+         if (this.leases.get(lease.id) != lease
+            || lease.state == LeaseState.REFUND_PENDING
+            || lease.state == LeaseState.ENDED
+            || lease.serverSwitchGeneration != generation) {
+            return;
+         }
+
+         lease.serverSwitchInFlight = false;
+         if (failure != null) {
+            this.logger.warn("Server switch request failed for " + lease.botId + ": " + failure.getMessage());
+         } else if (result == null) {
+            this.logger.warn("Server switch service returned no result for " + lease.botId);
+         } else if (!result.successful()) {
+            this.logger.warn("Server switch for " + lease.botId + " was not accepted: " + result.status());
          }
       }
    }
@@ -428,6 +506,8 @@ final class LeaseManager implements AutoCloseable {
 
    private void beginEnd(Lease var1, String var2, String var3) {
       var1.state = LeaseState.REFUND_PENDING;
+      var1.serverSwitchGeneration++;
+      var1.serverSwitchInFlight = false;
       var1.endReason = var2;
       if (var1.refundId == null) {
          var1.refundId = UUID.randomUUID();
