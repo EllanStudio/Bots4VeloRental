@@ -152,7 +152,12 @@ class Deployer:
         wanted = [f"BOT_{n}" for n in LONG_BOTS]
         missing = [b for b in wanted if b not in existing]
         if not missing:
-            self.note("velocity bots4velo config: BOT_11..BOT_22 already defined, skipped")
+            lowered = re.search(r"(?m)^  maximum-bots:\s*(\d+)", text)
+            if lowered and int(lowered.group(1)) < 40:
+                self.write_text(path, re.sub(r"(?m)^(  maximum-bots:\s*)\d+", r"\g<1>40", text))
+                self.note("velocity bots4velo config: runtime.maximum-bots raised to 40")
+            else:
+                self.note("velocity bots4velo config: BOT_11..BOT_22 already defined, skipped")
             return
         if not re.search(r"^bots:\s*$", text, re.M) or re.search(r"^[A-Za-z][^\n]*:\s*$", text[text.index("\nbots:") + 6:], re.M):
             sys.exit("bots: is not the last top-level key of the bots4velo config; refusing to guess where to insert")
@@ -163,7 +168,11 @@ class Deployer:
         out = text if text.endswith("\n") else text + "\n"
         for name in missing:
             out += template.replace("BOT_1", name)
-        after = yaml.safe_load(out)["bots"]
+        # The core refuses to start when the number of defined bots exceeds runtime.maximum-bots (default there: 20).
+        out = re.sub(r"(?m)^(  maximum-bots:\s*)(\d+)[ \t]*$", lambda m: m.group(1) + str(max(int(m.group(2)), 40)), out)
+        parsed = yaml.safe_load(out)
+        assert parsed["runtime"]["maximum-bots"] >= len(parsed["bots"]) + 10, "runtime.maximum-bots is too low for the defined bots"
+        after = parsed["bots"]
         assert all(b in after for b in wanted), "cloned bots did not parse"
         users = [v["username"] for v in after.values()]
         assert len(users) == len(set(users)), "duplicate bot usernames after edit"
