@@ -118,6 +118,10 @@ final class BridgeHttpServer implements AutoCloseable {
             return BridgeHttpServer.PlaceOutcome.fail("OUTSIDE_WORLD_BORDER", "Target is outside the world border for " + var2.world());
          } else {
             var3.setInvulnerable(true);
+            // A headless bot never sends the movement packets that would land it, so a spot even slightly above the
+            // ground reads as 'floating' and the server kicks it after 80 ticks. Stand it on the block and allow flight.
+            var3.setAllowFlight(true);
+            double standY = snapToGround(var4, var2.x(), var2.y(), var2.z());
             var3.setCollidable(false);
             var3.setCanPickupItems(false);
             var3.setSleepingIgnored(true);
@@ -129,7 +133,7 @@ final class BridgeHttpServer implements AutoCloseable {
                var1,
                var4.getKey(),
                var2.x(),
-               var2.y(),
+               standY,
                var2.z(),
                var2.yaw(),
                var2.pitch()
@@ -159,6 +163,17 @@ final class BridgeHttpServer implements AutoCloseable {
       } else {
          return BridgeHttpServer.PlaceOutcome.fail("OUT_OF_BOUNDS", "Target Y is outside the world height for " + var2.world());
       }
+   }
+
+   /**
+    * The Y of the top of the first solid block within 3 blocks below the point (so a player who bought the package
+    * mid-jump gets a bot standing on the floor); the original Y when there is nothing close underneath.
+    */
+   static double snapToGround(World world, double x, double y, double z) {
+      org.bukkit.util.RayTraceResult hit = world.rayTraceBlocks(
+         new Location(world, x, y + 0.2D, z), new org.bukkit.util.Vector(0.0D, -1.0D, 0.0D), 3.2D,
+         org.bukkit.FluidCollisionMode.NEVER, true);
+      return hit != null && hit.getHitPosition() != null ? hit.getHitPosition().getY() : y;
    }
 
    /**

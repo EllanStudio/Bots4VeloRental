@@ -52,7 +52,8 @@ items:
       name: <green>租用 30 分钟
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
-      - <gray>预存：<gold>150 <gray>艾尔岚金币
+      - <gray>预存 30 分钟的费用
+      - <gray>当前费率：<gold>%botrental_online_rate% <gray>币/分钟（离线 <gold>%botrental_offline_rate%<gray>）
       - <gray>机器人放在你现在站的位置
       - <yellow>点击租用
       - <dark_gray><strikethrough>----------------------------</strikethrough>
@@ -68,7 +69,8 @@ items:
       name: <green>租用 60 分钟
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
-      - <gray>预存：<gold>300 <gray>艾尔岚金币
+      - <gray>预存 60 分钟的费用
+      - <gray>当前费率：<gold>%botrental_online_rate% <gray>币/分钟（离线 <gold>%botrental_offline_rate%<gray>）
       - <gray>机器人放在你现在站的位置
       - <yellow>点击租用
       - <dark_gray><strikethrough>----------------------------</strikethrough>
@@ -84,7 +86,8 @@ items:
       name: <green>租用 120 分钟
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
-      - <gray>预存：<gold>600 <gray>艾尔岚金币
+      - <gray>预存 120 分钟的费用
+      - <gray>当前费率：<gold>%botrental_online_rate% <gray>币/分钟（离线 <gold>%botrental_offline_rate%<gray>）
       - <gray>机器人放在你现在站的位置
       - <yellow>点击租用
       - <dark_gray><strikethrough>----------------------------</strikethrough>
@@ -162,7 +165,7 @@ items:
         value: 加载中
     item:
       material: GOLD_INGOT
-      name: <gold>充值 300 艾尔岚金币
+      name: <gold>充值 120 艾尔岚金币
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
       - <gray>延长这个机器人的时间
@@ -171,7 +174,7 @@ items:
     actions:
     - type: player-command
       commands:
-      - botrent topup 1 300
+      - botrent topup 1 120
   slot_1_cancel:
     slot: 45
     view-requirement:
@@ -266,7 +269,7 @@ items:
         value: 加载中
     item:
       material: GOLD_INGOT
-      name: <gold>充值 300 艾尔岚金币
+      name: <gold>充值 120 艾尔岚金币
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
       - <gray>延长这个机器人的时间
@@ -275,7 +278,7 @@ items:
     actions:
     - type: player-command
       commands:
-      - botrent topup 2 300
+      - botrent topup 2 120
   slot_2_cancel:
     slot: 47
     view-requirement:
@@ -370,7 +373,7 @@ items:
         value: 加载中
     item:
       material: GOLD_INGOT
-      name: <gold>充值 300 艾尔岚金币
+      name: <gold>充值 120 艾尔岚金币
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
       - <gray>延长这个机器人的时间
@@ -379,7 +382,7 @@ items:
     actions:
     - type: player-command
       commands:
-      - botrent topup 3 300
+      - botrent topup 3 120
   slot_3_cancel:
     slot: 49
     view-requirement:
@@ -474,7 +477,7 @@ items:
         value: 加载中
     item:
       material: GOLD_INGOT
-      name: <gold>充值 300 艾尔岚金币
+      name: <gold>充值 120 艾尔岚金币
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
       - <gray>延长这个机器人的时间
@@ -483,7 +486,7 @@ items:
     actions:
     - type: player-command
       commands:
-      - botrent topup 4 300
+      - botrent topup 4 120
   slot_4_cancel:
     slot: 51
     view-requirement:
@@ -578,7 +581,7 @@ items:
         value: 加载中
     item:
       material: GOLD_INGOT
-      name: <gold>充值 300 艾尔岚金币
+      name: <gold>充值 120 艾尔岚金币
       lore:
       - <dark_gray><strikethrough>----------------------------</strikethrough>
       - <gray>延长这个机器人的时间
@@ -587,7 +590,7 @@ items:
     actions:
     - type: player-command
       commands:
-      - botrent topup 5 300
+      - botrent topup 5 120
   slot_5_cancel:
     slot: 53
     view-requirement:

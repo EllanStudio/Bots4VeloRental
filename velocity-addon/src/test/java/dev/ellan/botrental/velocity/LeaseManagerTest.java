@@ -259,6 +259,56 @@ class LeaseManagerTest {
 
     // ------------------------------------------------------------------ long-term packages
 
+    private static RentalConfig reloadConfig(long online, long offline, PackageConfig packages) {
+        List<String> pool = IntStream.rangeClosed(1, 10).mapToObj(index -> "BOT_" + index).toList();
+        return new RentalConfig("127.0.0.1", 18765, "01234567890123456789012345678901",
+            Map.of("redstone", "http://127.0.0.1:18766", "survival", "http://127.0.0.1:18767"),
+            "ellan_coin", online, offline, 3, 60, 90, pool, packages);
+    }
+
+    @Test
+    void reloadingPricesChangesWhatPlayersAreQuotedWithoutRestart() throws Exception {
+        TestRig rig = packageRig();
+        UUID owner = UUID.randomUUID();
+        assertThat(rig.manager.status(new StatusRequest(owner)).onlineRate()).isEqualTo(5);
+
+        PackageConfig old = packageConfig();
+        PackageConfig cheaper = new PackageConfig(true, old.pool(), old.maxPerPlayer(), old.maxCombat(), old.allowedServers(),
+            70, 40, Map.of(1, 1, 7, 5, 30, 18),
+            Map.of("small", new PackageConfig.Tier("small", "小", 3, 4, 300),
+                "large", new PackageConfig.Tier("large", "大", 8, 10, 1500)));
+        String summary = rig.manager.reloadPricing(reloadConfig(2, 3, cheaper));
+
+        var status = rig.manager.status(new StatusRequest(owner));
+        assertThat(status.onlineRate()).isEqualTo(2);
+        assertThat(status.offlineRate()).isEqualTo(3);
+        assertThat(status.offers().stream().filter(o -> o.tier().equals("small") && o.days() == 7).findFirst().orElseThrow().price())
+            .isEqualTo(300L * 5);
+        assertThat(summary).contains("online 2/min").contains("small=300");
+        // the quote is also what create() enforces
+        assertThat(rig.manager.create(packageRequest(owner, "redstone", "small", 7, false, 300L * 5)).success()).isTrue();
+        rig.close();
+    }
+
+    @Test
+    void reloadRejectsStructuralChangesAndKeepsTheOldPrices() throws Exception {
+        TestRig rig = packageRig();
+        UUID owner = UUID.randomUUID();
+        PackageConfig old = packageConfig();
+
+        PackageConfig fewerBots = new PackageConfig(true, List.of("BOT_11"), old.maxPerPlayer(), old.maxCombat(), old.allowedServers(),
+            old.refundPercent(), old.combatSurchargePercent(), old.chargedDays(), old.tiers());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> rig.manager.reloadPricing(reloadConfig(1, 1, fewerBots)));
+
+        PackageConfig droppedTier = new PackageConfig(true, old.pool(), old.maxPerPlayer(), old.maxCombat(), old.allowedServers(),
+            old.refundPercent(), old.combatSurchargePercent(), old.chargedDays(), Map.of("small", old.tiers().get("small")));
+        var thrown = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> rig.manager.reloadPricing(reloadConfig(1, 1, droppedTier)));
+        assertThat(thrown.getMessage()).contains("packages.tiers");
+
+        assertThat(rig.manager.status(new StatusRequest(owner)).onlineRate()).isEqualTo(5);
+        rig.close();
+    }
+
     private static final long DAY = 86_400L;
 
     private static PackageConfig packageConfig() {

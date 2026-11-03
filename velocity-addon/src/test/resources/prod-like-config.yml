@@ -11,8 +11,8 @@ bridge:
 rental:
   allowed-server: "redstone"
   currency: "ellan_coin"
-  online-rate-per-minute: 5
-  offline-rate-per-minute: 20
+  online-rate-per-minute: 2
+  offline-rate-per-minute: 3
   max-per-player: 5
   billing-period-seconds: 60
   startup-timeout-seconds: 90

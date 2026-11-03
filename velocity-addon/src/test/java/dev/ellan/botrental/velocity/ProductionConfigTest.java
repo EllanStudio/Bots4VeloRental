@@ -26,8 +26,8 @@ class ProductionConfigTest {
 
         assertThat(config.bridges()).containsOnlyKeys("redstone", "survival");
         assertThat(config.pool()).hasSize(10).first().isEqualTo("BOT_1");
-        assertThat(config.onlineRate()).isEqualTo(5);
-        assertThat(config.offlineRate()).isEqualTo(20);
+        assertThat(config.onlineRate()).isEqualTo(2);
+        assertThat(config.offlineRate()).isEqualTo(3);
 
         PackageConfig packages = config.packages();
         assertThat(packages.enabled()).isTrue();

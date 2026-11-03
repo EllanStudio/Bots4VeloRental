@@ -25,7 +25,8 @@ import java.util.Map.Entry;
 
 final class LeaseManager implements AutoCloseable {
    private static final String PREFIX = "[\u6302\u673a\u673a\u5668\u4eba] ";
-   private final RentalConfig config;
+   /** Replaced as a whole by {@link #reloadPricing}; every read takes a single consistent snapshot. */
+   private volatile RentalConfig config;
    private final AddonBotService bots;
    private final RentalBridge bridge;
    private final LeaseStore store;
@@ -734,6 +735,54 @@ final class LeaseManager implements AutoCloseable {
       } catch (Exception var4) {
          this.logger.warn("Refund remains pending for " + var1.id + ": " + var4.getMessage());
       }
+   }
+
+   /**
+    * Applies a re-read config.yml without a restart. Only the price table, the refund and surcharge rules and the
+    * startup timeout may change; pools, ports, secrets, limits and the tier set are structural and rejected so a live
+    * lease can never be orphaned by an edit.
+    *
+    * @return a one-line summary of the prices now in force
+    * @throws IllegalArgumentException when the new file changes something that needs a restart
+    */
+   synchronized String reloadPricing(RentalConfig next) {
+      String blocked = structuralDifference(this.config, next);
+      if (blocked != null) {
+         throw new IllegalArgumentException("'" + blocked + "' changed; that needs a restart, prices were not reloaded");
+      }
+
+      this.config = next;
+      StringBuilder summary = new StringBuilder("hourly online ").append(next.onlineRate()).append("/min, offline ")
+         .append(next.offlineRate()).append("/min");
+      if (next.packages().enabled()) {
+         summary.append("; packages/day");
+         next.packages().tiers().values().forEach(tier -> summary.append(' ').append(tier.id()).append('=').append(tier.dayPrice()));
+         summary.append(", charged days ").append(next.packages().chargedDays())
+            .append(", combat +").append(next.packages().combatSurchargePercent()).append('%')
+            .append(", refund ").append(next.packages().refundPercent()).append('%');
+      }
+
+      return summary.toString();
+   }
+
+   /** Name of the first setting that differs and cannot be hot-reloaded, or null when the change is reload-safe. */
+   static String structuralDifference(RentalConfig current, RentalConfig next) {
+      if (!current.bindAddress().equals(next.bindAddress())) return "http.bind-address";
+      if (current.port() != next.port()) return "http.port";
+      if (!current.sharedSecret().equals(next.sharedSecret())) return "bridge.shared-secret";
+      if (!current.bridges().equals(next.bridges())) return "bridge.servers";
+      if (!current.currency().equals(next.currency())) return "rental.currency";
+      if (current.maxPerPlayer() != next.maxPerPlayer()) return "rental.max-per-player";
+      if (current.billingPeriodSeconds() != next.billingPeriodSeconds()) return "rental.billing-period-seconds";
+      if (!current.pool().equals(next.pool())) return "rental.pool";
+      PackageConfig a = current.packages();
+      PackageConfig b = next.packages();
+      if (a.enabled() != b.enabled()) return "packages.enabled";
+      if (!a.pool().equals(b.pool())) return "packages.pool";
+      if (a.maxPerPlayer() != b.maxPerPlayer()) return "packages.max-per-player";
+      if (!a.allowedServers().equals(b.allowedServers())) return "packages.allowed-servers";
+      if (!a.tiers().keySet().equals(b.tiers().keySet())) return "packages.tiers (names)";
+      return null;
    }
 
    private void reconcileUnusedPool() {
