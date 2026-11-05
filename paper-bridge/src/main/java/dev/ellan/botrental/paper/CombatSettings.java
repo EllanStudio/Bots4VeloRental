@@ -8,7 +8,9 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.EntityType;
 
 /** The {@code combat:} section of the paper bridge config. Everything is optional; missing means safe defaults. */
-record CombatSettings(boolean enabled, int intervalTicks, double reach, boolean lineOfSight, Set<EntityType> excluded) {
+record CombatSettings(
+   boolean enabled, int intervalTicks, double reach, boolean lineOfSight, boolean armorStands, Set<EntityType> excluded
+) {
    static CombatSettings load(FileConfiguration config, Logger logger) {
       Set<EntityType> excluded = new HashSet<>();
       for (String name : config.getStringList("combat.exclude-types")) {
@@ -24,6 +26,7 @@ record CombatSettings(boolean enabled, int intervalTicks, double reach, boolean 
          Math.max(1, config.getInt("combat.interval-ticks", 4)),
          Math.min(6.0D, Math.max(1.0D, config.getDouble("combat.reach", 3.0D))),
          config.getBoolean("combat.line-of-sight", true),
+         config.getBoolean("combat.armor-stands", true),
          Set.copyOf(excluded));
    }
 }

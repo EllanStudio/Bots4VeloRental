@@ -14,7 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Boss;
 import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Entity;
@@ -29,6 +31,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Vector;
 
 /**
  * Lets a rented "combat" bot hold an item handed over by its owner and hit nearby hostile mobs with it.
@@ -40,7 +44,37 @@ import org.bukkit.util.BoundingBox;
  */
 final class BotCombatService implements Listener, AutoCloseable {
    /** What we know about a bot that should currently fight. */
-   private record Fighter(UUID leaseId, UUID owner) {
+   private record Fighter(UUID leaseId, UUID owner, Facing facing) {
+   }
+
+   /**
+    * Where the owner left the bot looking. Hitting a mob turns the bot towards it, so the original aim is remembered
+    * (a rotation we did not cause is taken as the new aim) and armor stands are looked for along it.
+    */
+   private static final class Facing {
+      private boolean known;
+      private float homeYaw;
+      private float homePitch;
+      private float lastYaw;
+      private float lastPitch;
+
+      /** Call with the bot's current rotation before acting; adopts it as home unless it is our own last turn. */
+      void observe(float yaw, float pitch) {
+         if (!this.known || !ReachMath.sameAngle(yaw, this.lastYaw, 0.5F) || !ReachMath.sameAngle(pitch, this.lastPitch, 0.5F)) {
+            this.homeYaw = yaw;
+            this.homePitch = pitch;
+         }
+
+         this.known = true;
+         this.lastYaw = yaw;
+         this.lastPitch = pitch;
+      }
+
+      /** Call after we turned the bot ourselves, so that turn is not mistaken for the owner re-aiming it. */
+      void turned(float yaw, float pitch) {
+         this.lastYaw = yaw;
+         this.lastPitch = pitch;
+      }
    }
 
    private final JavaPlugin plugin;
@@ -48,6 +82,12 @@ final class BotCombatService implements Listener, AutoCloseable {
    private final GearStore gear;
    private final Set<String> botNames;
    private final Map<String, Fighter> fighters = new ConcurrentHashMap<>();
+   /**
+    * What each fighting bot must hold in its main hand, straight from {@link GearStore}. Other plugins (cross-server
+    * inventory sync on login, for one) can replace a bot's inventory after we handed it the item, so the attack loop
+    * checks the hand against this and puts the item back.
+    */
+   private final Map<String, ItemStack> expectedHand = new ConcurrentHashMap<>();
    private BukkitTask attackTask;
 
    BotCombatService(JavaPlugin plugin, CombatSettings settings, GearStore gear, Set<String> botNames) {
@@ -83,6 +123,7 @@ final class BotCombatService implements Listener, AutoCloseable {
       String key = botName.toLowerCase(Locale.ROOT);
       Player bot = Bukkit.getPlayerExact(botName);
       if (!request.combat() || !this.settings.enabled()) {
+         this.expectedHand.remove(key);
          if (this.fighters.remove(key) != null && bot != null) {
             this.clearHands(bot);
          }
@@ -90,7 +131,8 @@ final class BotCombatService implements Listener, AutoCloseable {
          return;
       }
 
-      this.fighters.put(key, new Fighter(request.leaseId(), request.ownerUuid()));
+      this.fighters.put(key, new Fighter(request.leaseId(), request.ownerUuid(), new Facing()));
+      this.rememberHand(key, request.leaseId());
       if (bot != null) {
          this.applyGear(bot, request.leaseId());
       }
@@ -101,6 +143,15 @@ final class BotCombatService implements Listener, AutoCloseable {
       // Always overwrite: whatever a previous renter left in this bot's hands must never carry over.
       bot.getInventory().setItemInMainHand(stored.map(g -> ItemStack.deserializeBytes(g.item())).orElse(null));
       bot.getInventory().setItemInOffHand(null);
+   }
+
+   private void rememberHand(String key, UUID leaseId) {
+      Optional<GearStore.Gear> stored = this.gear.get(leaseId);
+      if (stored.isPresent()) {
+         this.expectedHand.put(key, ItemStack.deserializeBytes(stored.get().item()));
+      } else {
+         this.expectedHand.remove(key);
+      }
    }
 
    private void clearHands(Player bot) {
@@ -133,6 +184,7 @@ final class BotCombatService implements Listener, AutoCloseable {
       // Only after the durable write succeeded do we take the item from the player's hand.
       owner.getInventory().setItemInMainHand(null);
       previous.ifPresent(old -> this.giveBack(owner, ItemStack.deserializeBytes(old.item())));
+      this.expectedHand.put(lease.botUsername().toLowerCase(Locale.ROOT), giving.clone());
       Player bot = Bukkit.getPlayerExact(lease.botUsername());
       if (bot != null) {
          this.applyGear(bot, lease.leaseId());
@@ -155,6 +207,7 @@ final class BotCombatService implements Listener, AutoCloseable {
          this.plugin.getLogger().log(Level.SEVERE, "Could not clear bot gear for " + lease.leaseId(), failure);
       }
 
+      this.expectedHand.remove(lease.botUsername().toLowerCase(Locale.ROOT));
       Player bot = Bukkit.getPlayerExact(lease.botUsername());
       if (bot != null) {
          this.clearHands(bot);
@@ -208,6 +261,7 @@ final class BotCombatService implements Listener, AutoCloseable {
          if (entry.getValue().leaseId().equals(item.leaseId())) {
             bot = Bukkit.getPlayerExact(entry.getKey());
             this.fighters.remove(entry.getKey());
+            this.expectedHand.remove(entry.getKey());
          }
       }
 
@@ -271,29 +325,56 @@ final class BotCombatService implements Listener, AutoCloseable {
             continue;
          }
 
+         // Put the owner's item back if the hand is empty or holds a different kind of item. Only the material is
+         // compared: enchantment plugins rewrite a held item's data on their own, and its durability drops as it
+         // is used, so a strict comparison never matches and would reset the item on every pass.
+         ItemStack expected = this.expectedHand.get(entry.getKey());
+         if (expected != null && bot.getInventory().getItemInMainHand().getType() != expected.getType()) {
+            bot.getInventory().setItemInMainHand(expected.clone());
+            this.plugin.getLogger().info("Restored the held item of rental bot " + bot.getName());
+         }
+
          // Full-strength hits only: the vanilla cooldown is the weapon's rate of fire.
          if (bot.getAttackCooldown() < 1.0F) {
             continue;
          }
 
-         LivingEntity target = this.pickTarget(bot);
-         if (target == null) {
+         Facing facing = entry.getValue().facing();
+         facing.observe(bot.getLocation().getYaw(), bot.getLocation().getPitch());
+
+         Location eye = bot.getEyeLocation();
+         LivingEntity target = null;
+         Location aim = null;
+         LivingEntity mob = this.pickTarget(bot, eye);
+         if (mob != null) {
+            target = mob;
+            aim = this.visibleAimPoint(bot, eye, mob.getBoundingBox());
+         } else if (this.settings.armorStands()) {
+            RayTraceResult hit = this.aimedArmorStand(bot, eye, facing);
+            if (hit != null && hit.getHitEntity() instanceof ArmorStand stand) {
+               target = stand;
+               aim = hit.getHitPosition().toLocation(bot.getWorld());
+            }
+         }
+
+         if (target == null || aim == null) {
             continue;
          }
 
-         bot.lookAt(target.getEyeLocation(), io.papermc.paper.entity.LookAnchor.EYES);
+         bot.lookAt(aim.getX(), aim.getY(), aim.getZ(), io.papermc.paper.entity.LookAnchor.EYES);
+         facing.turned(bot.getLocation().getYaw(), bot.getLocation().getPitch());
          bot.attack(target);
          bot.swingMainHand();
       }
    }
 
-   private LivingEntity pickTarget(Player bot) {
-      Location eye = bot.getEyeLocation();
+   /** The nearest hostile mob whose hitbox the bot can reach and see (see {@link ReachMath#aimPoints}). */
+   private LivingEntity pickTarget(Player bot, Location eye) {
       double search = this.settings.reach() + 1.0D;
       LivingEntity best = null;
       double bestDistance = Double.MAX_VALUE;
       for (Entity candidate : bot.getNearbyEntities(search, search, search)) {
-         if (!(candidate instanceof LivingEntity living) || !this.attackable(living)) {
+         if (!(candidate instanceof LivingEntity living) || !this.attackableMob(living)) {
             continue;
          }
 
@@ -304,7 +385,7 @@ final class BotCombatService implements Listener, AutoCloseable {
             continue;
          }
 
-         if (this.settings.lineOfSight() && !bot.hasLineOfSight(living)) {
+         if (this.visibleAimPoint(bot, eye, box) == null) {
             continue;
          }
 
@@ -315,7 +396,49 @@ final class BotCombatService implements Listener, AutoCloseable {
       return best;
    }
 
-   private boolean attackable(LivingEntity entity) {
+   /**
+    * A point on the box that the eyes have a clear ray to, nearest first, or null when every ray is blocked. With
+    * line-of-sight off the nearest point is returned without looking at the blocks in between.
+    */
+   private Location visibleAimPoint(Player bot, Location eye, BoundingBox box) {
+      double[][] points = ReachMath.aimPoints(eye.getX(), eye.getY(), eye.getZ(),
+         box.getMinX(), box.getMinY(), box.getMinZ(), box.getMaxX(), box.getMaxY(), box.getMaxZ());
+      for (double[] p : points) {
+         Location point = new Location(eye.getWorld(), p[0], p[1], p[2]);
+         if (!this.settings.lineOfSight()) {
+            return point;
+         }
+
+         Vector way = point.toVector().subtract(eye.toVector());
+         double length = way.length();
+         if (length <= 0.05D) {
+            return point;               // the eyes are in (or against) the box
+         }
+
+         // Stop just short of the target so the face it is pressed against does not count as an obstacle.
+         if (eye.getWorld().rayTraceBlocks(eye, way.multiply(1.0D / length), length - 0.02D,
+            FluidCollisionMode.NEVER, true) == null) {
+            return point;
+         }
+      }
+
+      return null;
+   }
+
+   /**
+    * The armor stand under the bot's crosshair, if any: a ray from the eyes along the remembered aim, stopped by
+    * blocks like any vanilla click. Only stands the bot is actually pointing at are hit, never every stand nearby.
+    * Marker stands have no hitbox and invulnerable ones cannot be hurt, so neither is a target.
+    */
+   private RayTraceResult aimedArmorStand(Player bot, Location eye, Facing facing) {
+      double[] d = ReachMath.direction(facing.homeYaw, facing.homePitch);
+      RayTraceResult hit = bot.getWorld().rayTrace(eye, new Vector(d[0], d[1], d[2]), this.settings.reach(),
+         FluidCollisionMode.NEVER, true, 0.0D,
+         e -> e instanceof ArmorStand stand && !stand.isMarker() && !stand.isInvulnerable() && stand.isValid());
+      return hit != null && hit.getHitEntity() != null ? hit : null;
+   }
+
+   private boolean attackableMob(LivingEntity entity) {
       if (!(entity instanceof Enemy) || entity instanceof Player || entity instanceof Boss) {
          return false;
       }

@@ -28,7 +28,8 @@ combat:
   enabled: true
   interval-ticks: 4          # how often a bot looks for a target
   reach: 3.0                 # vanilla survival reach, measured to the target's hitbox
-  line-of-sight: true
+  line-of-sight: true        # a clear ray from the eyes to the target's hitbox (any of 3 aim points) is required
+  armor-stands: true         # also hit a (non-marker) armor stand that the bot's crosshair is pointing at
   exclude-types:             # mobs that must never be hit (neutral until provoked, bosses, ...)
     - ENDERMAN
     - ZOMBIFIED_PIGLIN
