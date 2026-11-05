@@ -543,6 +543,22 @@ final class LeaseManager implements AutoCloseable {
       }
    }
 
+   /**
+    * The core's start()/reconnect() replace a pending activation and put the new one at the END of its global
+    * queue (one slot per spawn-interval, 5s by default). Retrying every 10s while several leases wait therefore
+    * keeps pushing every bot back and none ever runs (seen after a proxy restart with 6 package leases).
+    * Keep the retry interval longer than the time the whole queue needs.
+    */
+   private long startRetryIntervalMillis() {
+      long starting = 0L;
+      for (Lease lease : this.leases.values()) {
+         if (lease.state == LeaseState.STARTING) {
+            starting++;
+         }
+      }
+      return Math.max(10000L, 5000L * (starting + 4L));
+   }
+
    private void tickStarting(Lease var1) throws Exception {
       long var2 = this.now();
       if (var2 >= var1.startDeadline && var1.isPackage() && var1.expiresAt > 0L) {
@@ -582,7 +598,7 @@ final class LeaseManager implements AutoCloseable {
             } else if (this.bridge.place(var1.id, var1.botUsername, var1.ownerUuid, var1.location, var1.tier, var1.combat)) {
                this.activate(var1);
             }
-         } else if (!var1.serverSwitchInFlight && var2 - var1.lastActionAt >= 10000L) {
+         } else if (!var1.serverSwitchInFlight && var2 - var1.lastActionAt >= this.startRetryIntervalMillis()) {
             if (var4.state() == AddonBotState.RECONNECT_WAIT || var4.state() == AddonBotState.FAILED) {
                this.bots.reconnect(var1.botId);
             } else if (var4.state() == AddonBotState.STOPPED) {
