@@ -39,3 +39,21 @@ combat:
 
 # Menus opened by the bridge itself (zMenu inventory names).
 package-manage-menu-name: "zmenu:机器人套餐管理"
+
+# Long-term bots: make the view distance equal to the simulation distance. Chunks between the two load but never
+# tick, and mobs that walk into them freeze there for good. Applied whenever a bot is (re)placed.
+load-radius:
+  view-equals-simulation: true
+
+# Around long-term bots, remove mobs frozen in loaded-but-not-ticking chunks when vanilla would have despawned them
+# (not persistent, unnamed, untamed, not leashed/riding, not from a bucket, not in a raid, >32 blocks from players).
+# Animals, axolotls and villagers are never touched. Mobs with scoreboard tags or plugin data are kept, except data
+# from the namespaces listed under ignore-data-namespaces.
+frozen-ring-cleanup:
+  enabled: true
+  interval-seconds: 120
+  extra-chunks: 2              # how far past the bot's view distance to look
+  categories: [MONSTER, WATER_ANIMAL, WATER_AMBIENT, WATER_UNDERGROUND_CREATURE, AMBIENT]
+  exclude-types: []
+  ignore-data-namespaces: []
+  log: true

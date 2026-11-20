@@ -36,6 +36,7 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
    private ExecutorService executor;
    private RentalPlaceholders placeholders;
    private BotCombatService combat;
+   private FrozenRingSweeper ringSweeper;
 
    public void onEnable() {
       try {
@@ -51,9 +52,11 @@ public final class BotRentalPaperPlugin extends JavaPlugin implements Listener {
             new GearStore(this.getDataFolder().toPath().resolve("bot-gear.properties")),
             this.rentalConfig.botUsernames().stream().map(name -> name.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toUnmodifiableSet()));
          this.combat.start();
+         this.ringSweeper = new FrozenRingSweeper(this, FrozenRingSweeper.Settings.load(this.getConfig(), this.getLogger()));
+         this.ringSweeper.start();
          this.bridgeServer = new BridgeHttpServer(
             this, this.rentalConfig, this.economy, new RefundLedger(this.getDataFolder().toPath().resolve("processed-refunds.properties")),
-            this.combat
+            this.combat, this.ringSweeper
          );
          this.bridgeServer.start();
          this.executor = Executors.newVirtualThreadPerTaskExecutor();

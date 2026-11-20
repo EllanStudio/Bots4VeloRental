@@ -29,12 +29,15 @@ final class BridgeHttpServer implements AutoCloseable {
    private final Set<String> botUsernames;
    private final String serverId;
    private final BotCombatService combat;
+   private final FrozenRingSweeper ringSweeper;
    private final HttpServer server;
    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-   BridgeHttpServer(final JavaPlugin var1, PaperRentalConfig var2, EconomyService var3, RefundLedger var4, BotCombatService combat) throws IOException {
+   BridgeHttpServer(final JavaPlugin var1, PaperRentalConfig var2, EconomyService var3, RefundLedger var4, BotCombatService combat,
+                    FrozenRingSweeper ringSweeper) throws IOException {
       this.plugin = var1;
       this.combat = combat;
+      this.ringSweeper = ringSweeper;
       this.economy = var3;
       this.refunds = var4;
       this.serverId = var2.serverId();
@@ -185,6 +188,12 @@ final class BridgeHttpServer implements AutoCloseable {
       int view = request.viewDistance();
       if (simulation >= 2) {
          bot.setSimulationDistance(simulation);
+         // Chunks between the simulation and the view distance load but never tick, and mobs that wander into them
+         // freeze there for good. Keeping the two equal leaves only the thin border the server always adds.
+         if (view > simulation && this.plugin.getConfig().getBoolean("load-radius.view-equals-simulation", true)) {
+            view = simulation;
+         }
+         this.ringSweeper.track(bot);
       }
 
       if (view >= 2) {
